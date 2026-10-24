@@ -1,0 +1,20 @@
+{
+  "titulo_youtube": "Los misterios antiguos más inquietantes, de la superficie a las profundidades",
+  "descripcion": "Bajamos por el iceberg de la historia antigua: desde la Esfinge y el Sudario de Turín hasta los ataúdes colgantes de China y los dioses con cabezas imposibles. Casos reales, datos verificados y preguntas que siguen sin respuesta.\nCada nivel nos hunde un poco más en lo desconocido, pero siempre con los pies en la evidencia.",
+  "etiquetas": ["misterios antiguos", "historia", "iceberg", "arqueología", "Egipto", "Sudario de Turín", "civilizaciones perdidas", "documental", "misterios históricos", "curiosidades"],
+  "guia_visual": "Warm sunlit ancient desert and stone monuments at the top, gradually shifting to dim cold blue-grey tones, murky underground caves, and deep dark ocean-like abyss at the bottom, cinematic, muted earthy palette, no legible text.",
+  "capitulos": [
+    {
+      "titulo": "Nivel 1: La superficie",
+      "resumen": "Un códice indescifrable, un sudario con una silueta misteriosa y una esfinge sin nariz. Tres enigmas que casi todos conocen, y que apenas rascan la superficie."
+    },
+    {
+      "titulo": "Nivel 2: Las profundidades medias",
+      "resumen": "Piedras gigantes que nadie explica, un mapa del siglo XVI que parece dibujar la Antártida y el misterio de las tumbas de Cleopatra. Cada hallazgo nos hunde un poco más."
+    },
+    {
+      "titulo": "Nivel 3: El fondo del iceberg",
+      "resumen": "Ataúdes colgados sobre precipicios, cuevas talladas en la roca sin autor conocido y siete estrellas donde solo se ven seis. Lo más oscuro del iceberg espera en la última profundidad."
+    }
+  ]
+}

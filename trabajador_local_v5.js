@@ -18,10 +18,15 @@ const CFG = {
     urlPanel: (process.env.URL_PANEL || 'https://panel-youtube-familia.onrender.com').replace(/\/$/, ''),
     claveWorker: process.env.CLAVE_WORKER || '',
 
-    // Capítulos (la narración final): modelo de calidad.
+    // Capítulos (la narración final)
     modelo: process.env.MODELO_CLAUDE || 'claude-sonnet-5-5',
-    // Plan y shorts: puedes poner uno más barato, p. ej. claude-haiku-5-5
+    // Plan y shorts
     modeloEconomico: process.env.MODELO_ECONOMICO || process.env.MODELO_CLAUDE || 'claude-sonnet-5-5',
+    // Nivel de "esfuerzo" (cuánto razona/escribe): low | medium | high
+    efforts: {
+        capitulos: process.env.EFFORT_CAPITULOS || 'medium',
+        plan: process.env.EFFORT_PLAN || 'low'
+    },
 
     telegram: {
         token: process.env.TELEGRAM_BOT_TOKEN || '',
@@ -32,8 +37,10 @@ const CFG = {
     intervaloMin: Number(process.env.INTERVALO_MIN || 5),
     duracionMin: Number(process.env.DURACION_MIN || 10),
     shortsPorVideo: Number(process.env.SHORTS_POR_VIDEO || 3),
-    palabrasPorMinuto: 145,
+    // Palabras por minuto de la voz. Se autocalibra con tus videos reales (cache/calibracion.json)
+    palabrasPorMinuto: Number(process.env.WPM || 150),
     minutosPorCapitulo: 3,
+    umbralCapituloCorto: 0.8, // si un capítulo trae menos del 80% de las palabras pedidas, se amplía
     maxCharsTranscripcion: 60000,
 
     fps: 30,
@@ -45,10 +52,17 @@ const CFG = {
         comfyUrl: process.env.COMFY_URL || 'http://127.0.0.1:8188',
         forgeUrl: process.env.FORGE_URL || 'http://127.0.0.1:7860',
         checkpoint: process.env.COMFY_CHECKPOINT || '',
-        pasos: Number(process.env.IMAGEN_PASOS || 28),
+        pasos: Number(process.env.IMAGEN_PASOS || 30),
         cfg: Number(process.env.IMAGEN_CFG || 6.5),
-        negativo: 'text, letters, words, watermark, logo, signature, blurry, low quality, deformed, extra fingers, bad anatomy, modern clothing, cartoon'
+        negativo: 'text, letters, words, watermark, logo, signature, blurry, low quality, deformed, extra fingers, bad anatomy, extra limbs, cropped, modern clothing, cartoon'
     }
+};
+
+// Tarifas publicadas (USD por millón de tokens). Son estimaciones: verifica en claude.com/pricing
+const PRECIOS = {
+    'haiku-5-5': { entrada: 0.10, salida: 0.50, cacheLeida: 0.01, cacheEscrita: 0.125 },
+    'sonnet-5-5': { entrada: 2.00, salida: 10.00, cacheLeida: 0.10, cacheEscrita: 2.50 },
+    'opus-5-5': { entrada: 4.00, salida: 20.00, cacheLeida: 0.20, cacheEscrita: 5.00 }
 };
 
 const FORMATOS = {
@@ -69,12 +83,10 @@ const DIR = {
     audio: path.join(__dirname, 'cache', 'audio'),
     imagenes: path.join(__dirname, 'cache', 'imagenes'),
     trabajo: path.join(__dirname, 'trabajo'),
-    // Si usas Google Drive para escritorio, apunta SALIDA_DIR a una carpeta sincronizada
     salida: process.env.SALIDA_DIR || path.join(__dirname, 'salida'),
     musica: path.join(__dirname, 'musica')
 };
 
-// Nichos: definen audiencia, tono, voz por defecto y estilo visual
 const NICHOS = {
     misterio: {
         audiencia: 'personas mayores de 50 años de habla hispana, apasionadas por los misterios históricos, la arqueología prohibida y los enigmas sin resolver',
@@ -93,11 +105,46 @@ const NICHOS = {
         tono: 'claro, entusiasta y sorprendente, sin tecnicismos innecesarios',
         voz: 'es-MX-DaliaNeural',
         estilo: 'clean cinematic illustration, vivid colors, dramatic lighting, highly detailed, sharp focus'
+    },
+
+    // "estructura" se aplica al plan y a cada capítulo; "reglas" se aplica a TODAS las llamadas de ese canal
+    iceberg: {
+        audiencia: 'jóvenes y adultos de habla hispana a quienes les fascinan los videos de "iceberg": historias, casos y datos del mundo ordenados desde lo más conocido hasta lo más oscuro y desconocido',
+        tono: 'inmersivo, curioso y cada vez más inquietante a medida que se desciende, siempre riguroso',
+        voz: 'es-US-AlonsoNeural',
+        estilo: 'cinematic polar and underwater scene, deep blue and teal tones, dramatic lighting, volumetric depth, highly detailed',
+        estructura: `Es un video de "iceberg" que desciende por niveles. Cada capítulo es UN NIVEL del iceberg (puede incluir 2 o 3 casos o historias dentro del nivel):
+- Nivel 1, "La superficie": lo que casi todos conocen.
+- Los niveles intermedios: datos y casos cada vez menos conocidos.
+- El último nivel, "Las profundidades": lo más oscuro, extraño o desconocido, pero REAL y documentado.
+Al empezar cada capítulo, anuncia el nivel con una frase corta y atmosférica (por ejemplo: "Bajamos al nivel 3...").
+Los prompt_imagen reflejan la profundidad: los primeros niveles son luminosos y despejados; los profundos, cada vez más oscuros, fríos y submarinos.`,
+        reglas: `- Incluye solo casos reales y verificables. En las profundidades es tentador inventar: no lo hagas. Si algo no está confirmado, dilo ("se cree que", "no hay pruebas concluyentes").
+- Trata los temas oscuros con respeto y sin violencia gráfica ni detalles morbosos.`
+    },
+    finanzas: {
+        audiencia: 'adultos de habla hispana que quieren entender mejor su dinero: ahorro, deudas, presupuesto, inversión básica y economía cotidiana',
+        tono: 'claro, tranquilo, cercano y práctico, sin tecnicismos ni promesas de enriquecimiento rápido',
+        voz: 'es-MX-DaliaNeural',
+        estilo: 'clean modern editorial illustration, soft natural light, warm neutral tones, everyday scenes, coins and household objects, no readable text or numbers, highly detailed',
+        reglas: `- Es contenido EDUCATIVO: explica conceptos y opciones, nunca des recomendaciones personalizadas de inversión ni digas "compra" o "vende" algo concreto.
+- No prometas ni insinúes ganancias seguras, rendimientos garantizados ni formas de hacerse rico rápido. Menciona siempre los riesgos.
+- Usa cifras solo si vienen del material y preséntalas como ejemplos o aproximaciones; no inventes porcentajes ni estadísticas.
+- Solo en el cierre del video (último capítulo) incluye una frase breve como: "Este video es solo informativo y no constituye asesoría financiera."`
+    },
+    metafisica: {
+        audiencia: 'adultos de habla hispana curiosos por la espiritualidad, la conciencia, la reencarnación y las vidas pasadas',
+        tono: 'sereno, contemplativo y respetuoso; invita a reflexionar sin imponer creencias',
+        voz: 'es-US-PalomaNeural',
+        estilo: 'ethereal cinematic scene, soft glowing light, gentle mist, cosmic and nature elements, serene atmosphere, golden and violet tones, highly detailed',
+        reglas: `- Presenta las vidas pasadas, la reencarnación y la metafísica como CREENCIAS, tradiciones, relatos o experiencias de personas, NUNCA como hechos comprobados. Usa expresiones como "según la tradición...", "quienes lo creen...", "algunos relatos cuentan...".
+- Cuando existan estudios o casos documentados, preséntalos con su contexto e incluye brevemente la postura escéptica o científica.
+- No hagas promesas de sanación ni afirmaciones médicas o psicológicas; no sugieras dejar tratamientos ni sustituir a médicos o terapeutas. No promociones terapias, cursos ni productos.
+- Respeta todas las creencias, sin ridiculizar ni imponer.
+- Solo en el cierre del video (último capítulo) incluye una frase breve como: "Este contenido es de carácter reflexivo y no sustituye la atención médica o psicológica."`
     }
 };
 
-// Canales: se leen de canales.json (el mismo archivo que usa el panel).
-// Campos: id, nombre, nicho y, opcional, "voz" para sobrescribir la voz del nicho.
 function cargarCanales() {
     let lista;
     try {
@@ -117,9 +164,11 @@ const CANALES = cargarCanales();
 let usarGPU = !process.env.FORZAR_CPU;
 const CLIENT_ID = crypto.randomUUID();
 
-// Contador de tokens del proyecto en curso
-const USO = { entrada: 0, cacheLeida: 0, cacheEscrita: 0, salida: 0 };
-function reiniciarUso() { USO.entrada = 0; USO.cacheLeida = 0; USO.cacheEscrita = 0; USO.salida = 0; }
+// Contador de tokens y costo del proyecto en curso
+const USO = { entrada: 0, cacheLeida: 0, cacheEscrita: 0, salida: 0, costo: 0, sinTarifa: false };
+function reiniciarUso() {
+    USO.entrada = 0; USO.cacheLeida = 0; USO.cacheEscrita = 0; USO.salida = 0; USO.costo = 0; USO.sinTarifa = false;
+}
 
 // =====================================================================
 // UTILIDADES
@@ -233,8 +282,6 @@ async function ejecutarRender(construirArgs, cwd) {
 }
 
 // --- JSON con auto-reparación ---
-// Si la respuesta quedó cortada, descarta el fragmento incompleto y cierra las estructuras
-// justo después de la última escena completa (no deja frases a medias).
 function repararJSON(crudo) {
     const ini = crudo.indexOf('{');
     if (ini === -1) throw new Error('La respuesta no contiene JSON.');
@@ -265,6 +312,35 @@ function contarPalabras(texto) {
     return texto.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function palabrasDeEscenas(escenas) {
+    return escenas.reduce((a, e) => a + contarPalabras(e.narracion), 0);
+}
+
+// =====================================================================
+// CALIBRACIÓN DE DURACIÓN (aprende cuántas palabras por minuto dice tu voz)
+// =====================================================================
+const ARCHIVO_CALIBRACION = path.join(DIR.cache, 'calibracion.json');
+
+async function leerCalibracion() {
+    try { return JSON.parse(await fs.readFile(ARCHIVO_CALIBRACION, 'utf-8')); } catch { return {}; }
+}
+
+async function wpmPara(voz) {
+    const c = await leerCalibracion();
+    const muestras = c[voz] || [];
+    if (!muestras.length) return CFG.palabrasPorMinuto;
+    return muestras.reduce((a, b) => a + b, 0) / muestras.length;
+}
+
+async function registrarCalibracion(voz, palabras, segundos) {
+    if (segundos < 60 || palabras < 50) return;
+    const c = await leerCalibracion();
+    const wpm = Number((palabras / (segundos / 60)).toFixed(1));
+    c[voz] = [...(c[voz] || []), wpm].slice(-5);
+    await fs.writeFile(ARCHIVO_CALIBRACION, JSON.stringify(c, null, 1), 'utf-8');
+    console.log(`[Sistema] 📐 Calibración: tu voz rinde ≈ ${wpm} palabras/min (se usará para planear los próximos videos).`);
+}
+
 // =====================================================================
 // COMUNICACIÓN CON EL PANEL
 // =====================================================================
@@ -287,7 +363,6 @@ async function pedirCola() {
     }
 }
 
-// Devuelve una función que informa el avance al panel (con límite de frecuencia)
 function crearReportero(proyecto) {
     let ultimo = 0;
     return async (datos, forzar = false) => {
@@ -366,12 +441,13 @@ async function obtenerTranscripcion(url, idVideo) {
 function promptSistema(nicho) {
     return `Eres un guionista experto en YouTube. Tu audiencia son ${nicho.audiencia}.
 Escribes en español neutro con un tono de ${nicho.tono}.
-
+${nicho.reglas ? '\nReglas específicas de este canal (tienen prioridad):\n' + nicho.reglas + '\n' : ''}
 Reglas permanentes de contenido:
 - Reescribe con tus propias palabras; nunca copies frases del material original.
 - Elimina promociones, saludos y "paja" del youtuber original.
 - No inventes datos, fechas, cifras ni citas. Si el material no alcanza, completa con contexto histórico o científico ampliamente aceptado y presenta lo incierto como hipótesis ("según algunas teorías...").
 - La narración es SOLO texto para decir en voz alta: sin títulos, asteriscos ni acotaciones.
+- Respeta la longitud pedida: es mejor pasarte un poco que quedarte corto.
 
 Reglas de retención (que la gente no se vaya):
 - Frases cortas y ritmo variado: alterna datos concretos con momentos de tensión.
@@ -379,36 +455,79 @@ Reglas de retención (que la gente no se vaya):
 - Cada minuto o dos, incluye un giro, una pregunta o un dato sorprendente.
 - Evita el lenguaje robótico y las muletillas: "en este video", "sin más preámbulos", "es importante destacar", "en conclusión", "cabe mencionar".
 
-Reglas de imagen:
-- Los "prompt_imagen" van en INGLÉS, describen una escena visual concreta (lugar, objetos, luz, ambiente) en 20 a 40 palabras, sin texto ni letras en la imagen y sin rostros reconocibles de personas reales.
+Reglas de imagen (muy importantes para que lo que se ve coincida con lo que se dice):
+- Cada "prompt_imagen" va en INGLÉS, tiene 20 a 40 palabras y describe EXACTAMENTE lo que ocurre en esa escena: el momento concreto, el lugar y los objetos que menciona la narración. Empieza por el sujeto principal.
+- Repite con las mismas palabras los elementos recurrentes (por ejemplo, el mismo barco, la misma época, el mismo lugar) para que las imágenes sean coherentes entre sí.
+- Sin texto ni letras en la imagen y sin rostros reconocibles de personas reales: usa siluetas, escenas de espaldas, manos, objetos o paisajes.
 
 Respondes ÚNICAMENTE con JSON válido, sin texto adicional ni bloques de código.`;
 }
 
-async function llamarClaude({ modelo, nicho, contexto, instruccion, maxTokens }) {
+// Ajustes de razonamiento según el modelo (en los modelos 5.5 el razonamiento consume los mismos tokens que el texto)
+function ajustesRazonamiento(modelo, esfuerzo) {
+    const m = String(modelo);
+    if (m.includes('sonnet-5-5')) return { thinking: { type: 'between_tools' }, output_config: { effort: esfuerzo } };
+    if (m.includes('haiku-5-5')) return { thinking: { type: 'disabled' }, output_config: { effort: esfuerzo } };
+    if (m.includes('opus-5-5') || m.includes('fable') || m.includes('mythos')) return { output_config: { effort: esfuerzo } };
+    return {};
+}
+
+async function crearMensaje(params) {
+    try {
+        return await anthropic.messages.create(params);
+    } catch (e) {
+        const msg = String((e && e.message) || '');
+        if (e && e.status === 400 && /thinking|output_config|effort/i.test(msg) && (params.thinking || params.output_config)) {
+            console.log('[Guionista] ⚠️ La API rechazó los ajustes de razonamiento; se reintenta sin ellos.');
+            const { thinking, output_config, ...resto } = params;
+            return await anthropic.messages.create(resto);
+        }
+        throw e;
+    }
+}
+
+function precioDe(modelo) {
+    const clave = Object.keys(PRECIOS).find(k => String(modelo).includes(k));
+    return clave ? PRECIOS[clave] : null;
+}
+
+async function llamarClaude({ modelo, nicho, contexto, instruccion, maxTokens, esfuerzo }) {
     const contenido = contexto ? [contexto, { type: 'text', text: instruccion }] : instruccion;
-    const respuesta = await anthropic.messages.create({
+    const respuesta = await crearMensaje({
         model: modelo,
         max_tokens: maxTokens,
         system: promptSistema(nicho),
-        messages: [{ role: 'user', content: contenido }]
+        messages: [{ role: 'user', content: contenido }],
+        ...ajustesRazonamiento(modelo, esfuerzo)
     });
     const crudo = respuesta.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
     if (!crudo) throw new Error(`Claude no devolvió texto (stop_reason: ${respuesta.stop_reason})`);
     if (respuesta.stop_reason === 'max_tokens') {
         console.log('[Guionista] ⚠️ La respuesta llegó al límite de tokens; se intentará rescatar lo completo.');
     }
+
     const u = respuesta.usage || {};
-    USO.entrada += u.input_tokens || 0;
-    USO.cacheLeida += u.cache_read_input_tokens || 0;
-    USO.cacheEscrita += u.cache_creation_input_tokens || 0;
-    USO.salida += u.output_tokens || 0;
-    console.log(`          (${modelo} | entrada: ${u.input_tokens || 0} | caché leída: ${u.cache_read_input_tokens || 0} | salida: ${u.output_tokens || 0})`);
+    const entrada = u.input_tokens || 0, leida = u.cache_read_input_tokens || 0;
+    const escrita = u.cache_creation_input_tokens || 0, salida = u.output_tokens || 0;
+    USO.entrada += entrada; USO.cacheLeida += leida; USO.cacheEscrita += escrita; USO.salida += salida;
+
+    let costoLlamada = 0;
+    const p = precioDe(modelo);
+    if (p) {
+        costoLlamada = (entrada * p.entrada + salida * p.salida + leida * p.cacheLeida + escrita * p.cacheEscrita) / 1e6;
+        USO.costo += costoLlamada;
+    } else {
+        USO.sinTarifa = true;
+    }
+    const tokTexto = Math.round(crudo.length / 3.3);
+    const tokRazon = Math.max(0, salida - tokTexto);
+    console.log(`          (${modelo} | entrada: ${entrada} | caché leída: ${leida} | salida: ${salida} [texto≈${tokTexto}, razonamiento≈${tokRazon}] | ≈$${costoLlamada.toFixed(3)})`);
     return crudo;
 }
 
-// Lee de caché o genera y guarda ANTES de interpretar (así nunca se paga dos veces)
-async function jsonConCache(archivo, generar, validar) {
+// Lee de caché o genera y guarda ANTES de interpretar (así nunca se paga dos veces).
+// Si regenerarSiInvalido=true y el resultado no sirve, lo genera de nuevo UNA vez.
+async function jsonConCache(archivo, generar, validar, regenerarSiInvalido = false) {
     let crudo;
     if (await existe(archivo)) {
         crudo = await fs.readFile(archivo, 'utf-8');
@@ -416,12 +535,20 @@ async function jsonConCache(archivo, generar, validar) {
         crudo = await generar();
         await fs.writeFile(archivo, crudo, 'utf-8');
     }
+    const intentar = (txt) => { const d = extraerJSON(txt); validar(d); return d; };
+
     try {
-        const datos = extraerJSON(crudo);
-        validar(datos);
-        return datos;
+        return intentar(crudo);
     } catch (e) {
-        throw new Error(`${e.message} Corrige o borra este archivo: ${archivo}`);
+        if (!regenerarSiInvalido) throw new Error(`${e.message} Corrige o borra este archivo: ${archivo}`);
+        console.log(`[Guionista] ♻️ Resultado inválido (${e.message}). Se generará de nuevo una vez.`);
+        crudo = await generar();
+        await fs.writeFile(archivo, crudo, 'utf-8');
+        try {
+            return intentar(crudo);
+        } catch (e2) {
+            throw new Error(`${e2.message} Corrige o borra este archivo: ${archivo}`);
+        }
     }
 }
 
@@ -436,7 +563,12 @@ function validarEscenas(escenas) {
 async function obtenerGuion(proyecto, canal, nicho, idVideo, minutos) {
     const clave = `${idVideo}_${canal.id}_${minutos}m`;
     const numCaps = Math.max(1, Math.round(minutos / CFG.minutosPorCapitulo));
-    const palabrasCap = Math.round((minutos * CFG.palabrasPorMinuto) / numCaps);
+    const wpm = await wpmPara(nicho.voz);
+    const palabrasObjetivo = Math.round(minutos * wpm);
+    const palabrasCap = Math.round(palabrasObjetivo / numCaps);
+    const bloqueEstructura = nicho.estructura
+        ? `\nESTRUCTURA OBLIGATORIA DE ESTE CANAL:\n${nicho.estructura}\n`
+        : '';
 
     let contexto = null;
     const getContexto = async () => {
@@ -451,79 +583,132 @@ async function obtenerGuion(proyecto, canal, nicho, idVideo, minutos) {
         return contexto;
     };
 
-    // --- 1) Plan ---
+    // --- 1) Plan (se valida que traiga TODOS los capítulos) ---
     const plan = await jsonConCache(
         path.join(DIR.guiones, `${clave}_plan.json`),
         async () => {
-            console.log(`[Guionista] 🗺️ Planificando video de ${minutos} min en ${numCaps} capítulos para "${canal.nombre}"...`);
+            console.log(`[Guionista] 🗺️ Planificando video de ${minutos} min (≈${palabrasObjetivo} palabras a ${Math.round(wpm)} pal/min) en ${numCaps} capítulos para "${canal.nombre}"...`);
             const previos = await temasPrevios(canal.id);
             const bloquePrevios = previos.length
                 ? `\nVideos ya producidos en este canal (no repitas el mismo enfoque ni títulos parecidos):\n${previos.map(t => '- ' + t).join('\n')}\n`
                 : '';
             return llamarClaude({
-                modelo: CFG.modeloEconomico, nicho, contexto: await getContexto(), maxTokens: 3000,
+                modelo: CFG.modeloEconomico, nicho, contexto: await getContexto(), maxTokens: 4000, esfuerzo: CFG.efforts.plan,
                 instruccion: `Planifica un video de ${minutos} minutos basado en el material de referencia, dividido en EXACTAMENTE ${numCaps} capítulos.
 El primer capítulo debe abrir con un gancho espectacular y el último cerrar de forma memorable.
-${bloquePrevios}
+Sé breve: cada "resumen" de capítulo tiene máximo 30 palabras.
+${bloquePrevios}${bloqueEstructura}
+Incluye una "guia_visual": en INGLÉS, máximo 30 palabras, que fije el mundo visual de todo el video (época, lugar, aspecto de los objetos o personajes recurrentes, paleta de colores) para que todas las imágenes sean coherentes.
+
 Responde con este JSON:
 {
   "titulo_youtube": "título atractivo en español",
   "descripcion": "descripción de 2 a 3 líneas",
   "etiquetas": ["etiqueta1", "etiqueta2"],
-  "capitulos": [ { "titulo": "...", "resumen": "2 a 3 oraciones con los puntos que debe cubrir" } ]
+  "guia_visual": "english visual guide",
+  "capitulos": [ { "titulo": "...", "resumen": "máx. 30 palabras" } ]
 }`
             });
         },
-        (d) => { if (!Array.isArray(d.capitulos) || d.capitulos.length === 0) throw new Error('El plan no trae capítulos.'); }
+        (d) => {
+            if (!Array.isArray(d.capitulos) || d.capitulos.length < numCaps) {
+                throw new Error(`El plan trae ${Array.isArray(d.capitulos) ? d.capitulos.length : 0} capítulos y se pidieron ${numCaps}.`);
+            }
+        },
+        true
     );
+    const guiaVisual = typeof plan.guia_visual === 'string' ? plan.guia_visual : '';
+    const bloqueGuia = guiaVisual
+        ? `\nGUÍA VISUAL FIJA (úsala en los prompt_imagen para que todas las imágenes sean coherentes): ${guiaVisual}\n`
+        : '';
 
-    // --- 2) Capítulos ---
+    // --- 2) Capítulos (se amplían si quedan cortos) ---
     const escenas = [];
     const total = plan.capitulos.length;
     for (let i = 0; i < total; i++) {
-        const cap = await jsonConCache(
-            path.join(DIR.guiones, `${clave}_cap${String(i + 1).padStart(2, '0')}.json`),
+        const capPlan = plan.capitulos[i];
+        // El nombre incluye una huella del plan: si el plan cambia, los capítulos viejos no se reutilizan por error
+        const base = path.join(DIR.guiones, `${clave}_cap${String(i + 1).padStart(2, '0')}_${hash(capPlan.titulo + '|' + (capPlan.resumen || '')).slice(0, 8)}`);
+
+        let cap = await jsonConCache(
+            `${base}.json`,
             async () => {
-                console.log(`[Guionista] ✍️ Escribiendo capítulo ${i + 1}/${total}: ${plan.capitulos[i].titulo}`);
+                console.log(`[Guionista] ✍️ Escribiendo capítulo ${i + 1}/${total}: ${capPlan.titulo}`);
                 const previo = escenas.slice(-2).map(e => e.narracion).join(' ');
                 return llamarClaude({
-                    modelo: CFG.modelo, nicho, contexto: await getContexto(), maxTokens: 8000,
+                    modelo: CFG.modelo, nicho, contexto: await getContexto(), maxTokens: 8000, esfuerzo: CFG.efforts.capitulos,
                     instruccion: `PLAN COMPLETO DEL VIDEO:
 ${JSON.stringify(plan.capitulos, null, 1)}
-
-Escribe AHORA solo el capítulo ${i + 1} de ${total}: "${plan.capitulos[i].titulo}".
-- Longitud: entre ${palabrasCap} y ${Math.round(palabrasCap * 1.2)} palabras de narración en total, sin pasarte.
+${bloqueGuia}${bloqueEstructura}
+Escribe AHORA solo el capítulo ${i + 1} de ${total}: "${capPlan.titulo}".
+- Longitud: entre ${palabrasCap} y ${Math.round(palabrasCap * 1.2)} palabras de narración en total. No te quedes corto.
 - ${i === 0 ? 'Empieza con un gancho espectacular en los primeros 15 segundos.' : 'Continúa con naturalidad, sin saludar ni repetir la introducción. Viene después de: "' + previo + '"'}
 - ${i === total - 1 ? 'Este es el último capítulo: cierra de forma memorable.' : 'No cierres la historia: deja la tensión abierta para el siguiente capítulo.'}
 - Divide en escenas de 1 a 3 oraciones (30 a 50 palabras cada una).
 
 JSON:
-{ "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description" } ] }`
+{ "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description of exactly this scene" } ] }`
                 });
             },
             (d) => validarEscenas(d.escenas)
         );
+
+        let palabrasCapReal = palabrasDeEscenas(cap.escenas);
+        if (palabrasCapReal < CFG.umbralCapituloCorto * palabrasCap) {
+            console.log(`[Guionista] 📏 Capítulo ${i + 1} corto (${palabrasCapReal} de ~${palabrasCap} palabras): se amplía.`);
+            const ampliado = await jsonConCache(
+                `${base}_ext.json`,
+                async () => llamarClaude({
+                    modelo: CFG.modelo, nicho, contexto: await getContexto(), maxTokens: 8000, esfuerzo: CFG.efforts.capitulos,
+                    instruccion: `Capítulo ${i + 1} de ${total} ("${capPlan.titulo}"). Resumen previsto: ${capPlan.resumen || ''}
+${bloqueGuia}${bloqueEstructura}
+Así quedó la primera versión:
+${JSON.stringify(cap.escenas)}
+
+Quedó corta: tiene ${palabrasCapReal} palabras y el objetivo es de ${palabrasCap} a ${Math.round(palabrasCap * 1.2)}.
+Reescribe el capítulo COMPLETO ampliándolo: añade detalles concretos del material, contexto, descripciones de lugares y momentos, y tensión narrativa. No repitas ideas ni rellenes con frases vacías. Conserva el mismo inicio y ${i === total - 1 ? 'un cierre memorable' : 'la tensión abierta al final'}.
+Escenas de 1 a 3 oraciones (30 a 50 palabras).
+
+JSON:
+{ "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description of exactly this scene" } ] }`
+                }),
+                (d) => validarEscenas(d.escenas)
+            );
+            const palabrasAmpliado = palabrasDeEscenas(ampliado.escenas);
+            if (palabrasAmpliado > palabrasCapReal) {
+                cap = ampliado;
+                palabrasCapReal = palabrasAmpliado;
+            }
+            console.log(`          Capítulo ${i + 1} ahora tiene ${palabrasCapReal} palabras.`);
+        }
         escenas.push(...cap.escenas);
     }
 
-    const palabras = escenas.reduce((a, e) => a + contarPalabras(e.narracion), 0);
-    console.log(`[Guionista] 📜 ${escenas.length} escenas, ${palabras} palabras (≈ ${(palabras / CFG.palabrasPorMinuto).toFixed(1)} min).`);
+    const palabras = palabrasDeEscenas(escenas);
+    console.log(`[Guionista] 📜 ${escenas.length} escenas, ${palabras} palabras (≈ ${(palabras / wpm).toFixed(1)} min; objetivo ${minutos} min).`);
 
-    return { titulo_youtube: plan.titulo_youtube, descripcion: plan.descripcion, etiquetas: plan.etiquetas, escenas, clave };
+    return {
+        titulo_youtube: plan.titulo_youtube, descripcion: plan.descripcion, etiquetas: plan.etiquetas,
+        guia_visual: guiaVisual, escenas, clave
+    };
 }
 
 async function obtenerShorts(guion, nicho, cantidad) {
+    const narracion = guion.escenas.map(e => e.narracion).join('\n');
+    const archivo = path.join(DIR.guiones, `${guion.clave}_shorts${cantidad}_${hash(narracion).slice(0, 8)}.json`);
     const datos = await jsonConCache(
-        path.join(DIR.guiones, `${guion.clave}_shorts${cantidad}.json`),
+        archivo,
         async () => {
             console.log(`[Guionista] 📱 Escribiendo ${cantidad} shorts...`);
-            const narracion = guion.escenas.map(e => e.narracion).join('\n');
+            const bloqueGuia = guion.guia_visual
+                ? `\nGUÍA VISUAL FIJA (úsala en los prompt_imagen): ${guion.guia_visual}\n`
+                : '';
             return llamarClaude({
-                modelo: CFG.modeloEconomico, nicho, contexto: null, maxTokens: 8000,
+                modelo: CFG.modeloEconomico, nicho, contexto: null, maxTokens: 8000, esfuerzo: CFG.efforts.plan,
                 instruccion: `Este es el guion completo de un video largo:
 
 ${narracion}
-
+${bloqueGuia}
 Crea ${cantidad} guiones de YouTube Shorts (vertical), cada uno sobre un momento o dato DISTINTO y atractivo del video.
 Reglas:
 - Cada short dura unos 45 a 55 segundos (≈ 120 a 135 palabras en total).
@@ -531,7 +716,7 @@ Reglas:
 - Divide en 7 a 9 escenas de 14 a 20 palabras.
 
 JSON:
-{ "shorts": [ { "titulo": "título corto con gancho", "descripcion": "1 línea", "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description" } ] } ] }`
+{ "shorts": [ { "titulo": "título corto con gancho", "descripcion": "1 línea", "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description of exactly this scene" } ] } ] }`
             });
         },
         (d) => {
@@ -670,10 +855,11 @@ async function imagenForge(prompt, semilla, formato) {
     return Buffer.from(datos.images[0], 'base64');
 }
 
-async function generarImagen(promptEscena, nicho, formato) {
+// Orden del prompt: primero la escena (lo más importante), luego la guía visual y por último el estilo del nicho
+async function generarImagen(promptEscena, nicho, formato, guiaVisual) {
     const I = CFG.imagen;
-    const prompt = `${promptEscena}, ${nicho.estilo}`;
-    const archivo = path.join(DIR.imagenes, `${hash([prompt, formato.imgAncho, formato.imgAlto, I.proveedor, I.checkpoint].join('|'))}.png`);
+    const prompt = [promptEscena, guiaVisual, nicho.estilo].filter(Boolean).join(', ');
+    const archivo = path.join(DIR.imagenes, `${hash([prompt, formato.imgAncho, formato.imgAlto, I.proveedor, I.checkpoint, I.pasos].join('|'))}.png`);
     if (await existe(archivo)) return archivo;
 
     const semilla = parseInt(hash(prompt).slice(0, 8), 16);
@@ -712,7 +898,7 @@ async function renderizarEscena({ imagen, audio, duracion, indice, carpeta, form
     const fade = 0.4;
 
     const filtro = [
-        `scale=${par(W * 1.4)}:${par(H * 1.4)}:force_original_aspect_ratio=increase`,
+        `scale=${par(W * 1.4)}:${par(H * 1.4)}:flags=lanczos:force_original_aspect_ratio=increase`,
         `crop=${par(W * 1.4)}:${par(H * 1.4)}`,
         `zoompan=z='${zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${CFG.fps}`,
         `fade=t=in:st=0:d=${fade}`,
@@ -823,8 +1009,8 @@ async function ensamblarVideo({ clips, escenas, carpeta, nichoKey, destinoFinal,
     await fs.copyFile(path.join(carpeta, 'final.mp4'), destinoFinal);
 }
 
-// Produce una pieza completa (video largo o short). onProgreso(fracción 0..1, texto)
-async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, carpeta, destinoFinal, onProgreso }) {
+// Produce una pieza completa. Devuelve { segundos, palabras } de la narración real.
+async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guiaVisual, carpeta, destinoFinal, onProgreso }) {
     await fs.mkdir(carpeta, { recursive: true });
     const total = escenas.length;
     const avisar = (f, txt) => { if (onProgreso) onProgreso(f, `${etiqueta}: ${txt}`); };
@@ -838,7 +1024,8 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, carp
         return audio;
     }), 2);
     const segundos = escenas.reduce((a, e) => a + e.duracion, 0);
-    console.log(`[Locutor] ⏱️ Duración real de la narración: ${(segundos / 60).toFixed(1)} min`);
+    const palabras = palabrasDeEscenas(escenas);
+    console.log(`[Locutor] ⏱️ Duración real de la narración: ${(segundos / 60).toFixed(1)} min (${palabras} palabras)`);
     avisar(0.12, 'narración lista');
 
     // 2) Imágenes con IA
@@ -846,7 +1033,7 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, carp
     for (let i = 0; i < total; i++) {
         console.log(`[Pintor] 🎨 ${etiqueta}: imagen ${i + 1}/${total}`);
         if (i % 3 === 0) avisar(0.12 + 0.58 * (i / total), `imagen ${i + 1}/${total}`);
-        imagenes.push(await generarImagen(escenas[i].prompt_imagen, nicho, formato));
+        imagenes.push(await generarImagen(escenas[i].prompt_imagen, nicho, formato, guiaVisual));
     }
 
     // 3) Clips en paralelo
@@ -867,6 +1054,7 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, carp
     await ensamblarVideo({ clips, escenas, carpeta, nichoKey, destinoFinal, formato });
     await fs.rm(carpeta, { recursive: true, force: true });
     console.log(`[Sistema] ✅ ${etiqueta} listo: ${destinoFinal}`);
+    return { segundos, palabras };
 }
 
 // =====================================================================
@@ -890,7 +1078,6 @@ async function producirVideo(proyecto, reportar) {
         ? Math.max(0, Math.min(10, Number(proyecto.shorts) || 0))
         : CFG.shortsPorVideo;
 
-    // Carpeta final: <SALIDA>/<canal>/<id>_<titulo>/
     const nombreCarpeta = `${proyecto.id}_${slug(proyecto.titulo)}`;
     const carpetaProyecto = path.join(DIR.salida, canal.id, nombreCarpeta);
     await fs.mkdir(carpetaProyecto, { recursive: true });
@@ -919,6 +1106,7 @@ async function producirVideo(proyecto, reportar) {
         canal: canal.id,
         proyecto: proyecto.titulo,
         referencia: proyecto.url,
+        duracion_objetivo_min: minutos,
         video: { titulo: guion.titulo_youtube, descripcion: guion.descripcion, etiquetas: guion.etiquetas },
         shorts: []
     };
@@ -927,14 +1115,25 @@ async function producirVideo(proyecto, reportar) {
     const archivos = [];
     const hayShorts = cantidadShorts > 0;
     const tramoVideo = hayShorts ? 60 : 90;
+    let duracionRealMin = null;
 
     // --- Video largo ---
     if (!videoListo) {
-        await producirPieza({
+        const r = await producirPieza({
             etiqueta: 'Video', escenas: guion.escenas, formato: FORMATOS.horizontal,
-            nicho, nichoKey, carpeta: path.join(DIR.trabajo, String(proyecto.id)), destinoFinal: rutaVideo,
+            nicho, nichoKey, guiaVisual: guion.guia_visual,
+            carpeta: path.join(DIR.trabajo, String(proyecto.id)), destinoFinal: rutaVideo,
             onProgreso: (f, txt) => reportar({ progreso: 5 + f * tramoVideo, mensaje: txt })
         });
+        duracionRealMin = r.segundos / 60;
+        await registrarCalibracion(nicho.voz, r.palabras, r.segundos);
+
+        const desvio = Math.round((duracionRealMin / minutos - 1) * 100);
+        console.log(`[Sistema] 📏 Duración final: ${duracionRealMin.toFixed(1)} min (objetivo ${minutos} min, ${desvio >= 0 ? '+' : ''}${desvio}%)`);
+        if (Math.abs(desvio) > 15) {
+            console.log('          Si la diferencia es grande, el sistema se ajusta solo en el próximo video (calibración de voz).');
+        }
+        info.duracion_real_min = Number(duracionRealMin.toFixed(1));
     }
     archivos.push('Video.mp4');
 
@@ -954,7 +1153,8 @@ async function producirVideo(proyecto, reportar) {
             try {
                 await producirPieza({
                     etiqueta: `Short ${n}`, escenas: s.escenas, formato: FORMATOS.vertical,
-                    nicho, nichoKey, carpeta: path.join(DIR.trabajo, `${proyecto.id}_short${n}`), destinoFinal: rutaShort(n),
+                    nicho, nichoKey, guiaVisual: guion.guia_visual,
+                    carpeta: path.join(DIR.trabajo, `${proyecto.id}_short${n}`), destinoFinal: rutaShort(n),
                     onProgreso: (f, txt) => reportar({ progreso: 65 + (n - 1) * tramoShort + f * tramoShort, mensaje: txt })
                 });
                 archivos.push(`Short_${n}.mp4`);
@@ -965,7 +1165,10 @@ async function producirVideo(proyecto, reportar) {
         }
     }
 
-    // --- Cierre: historial, panel, Telegram ---
+    // --- Cierre ---
+    info.costo_claude_usd_estimado = Number(USO.costo.toFixed(3));
+    await escribirInfo(carpetaProyecto, info);
+
     await registrarHistorial({
         canal: canal.id, titulo: proyecto.titulo, titulo_youtube: guion.titulo_youtube,
         url: proyecto.url, fecha: new Date().toISOString()
@@ -985,12 +1188,14 @@ async function producirVideo(proyecto, reportar) {
         `🎬 Video listo\n` +
         `Canal: ${canal.nombre}\n` +
         `Título sugerido: ${guion.titulo_youtube}\n` +
+        (duracionRealMin ? `Duración: ${duracionRealMin.toFixed(1)} min\n` : '') +
         `Shorts: ${archivos.length - 1}${lineasShorts ? '\n' + lineasShorts : ''}\n` +
         `📁 ${CFG.driveUrl || carpetaProyecto}\n` +
         `Carpeta: ${canal.id}/${nombreCarpeta}`
     );
 
     console.log(`[Sistema] 🧾 Claude en este proyecto → entrada: ${USO.entrada} | caché leída: ${USO.cacheLeida} | caché escrita: ${USO.cacheEscrita} | salida: ${USO.salida} tokens`);
+    console.log(`[Sistema] 💵 Costo estimado de Claude: ≈ $${USO.costo.toFixed(2)} USD${USO.sinTarifa ? ' (sin tarifa conocida para algún modelo; es un mínimo)' : ''}. Voz, imágenes y render: $0 (tu PC).`);
 }
 
 async function procesarCola() {

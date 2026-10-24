@@ -1,6 +1,6 @@
 [
-  { "id": "iceberg", "nombre": "Gael - Archivero Del Tiempo", "nicho": "iceberg" },
-  { "id": "iceberg", "nombre": "Leo – Iceberg del Mundo", "nicho": "iceberg" },
-  { "id": "metafisica", "nombre": "Mamá – Metafísica y Vidas Pasadas", "nicho": "metafisica" },
-  { "id": "misterio", "nombre": "Papá (por definir) – Misterio provisional", "nicho": "misterio" }
+  { "id": "gael_historias", "nombre": "Gael - Archivero Del Tiempo", "nicho": "iceberg" },
+  { "id": "leo_iceberg", "nombre": "Leo – Iceberg del Mundo", "nicho": "iceberg" },
+  { "id": "mama_metafisica", "nombre": "Mamá – Metafísica y Vidas Pasadas", "nicho": "metafisica" },
+  { "id": "papa_misterio", "nombre": "Papá (por definir) – Misterio provisional", "nicho": "misterio" }
 ]

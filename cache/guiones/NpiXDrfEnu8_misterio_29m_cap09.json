@@ -1,0 +1,52 @@
+{
+  "escenas": [
+    {
+      "narracion": "La última vez que alguien vio al Waratah con certeza fue la tarde del 27 de julio, hacia las cuatro. Fue el vapor Clan McIntyre. Cruzaron señales con lámpara mientras el barco, más nuevo y veloz, adelantaba al viejo vapor y se perdía en el horizonte.",
+      "prompt_imagen": "Early 20th century steamship at sea in late afternoon, a signal lamp blinking from its bridge, a faster liner overtaking it in the distance, golden light on calm swells, darkening clouds on the horizon."
+    },
+    {
+      "narracion": "Esa noche el tiempo empeoró con rapidez. Al día siguiente estalló una tormenta feroz. El capitán del Clan McIntyre diría después que había sido de lo peor que vio en sus trece años de mar.",
+      "prompt_imagen": "Violent storm at night off the South African coast, enormous black waves crashing over a small old steamer, lightning splitting a heavy sky, spray and foam in cold blue light."
+    },
+    {
+      "narracion": "El 29 de julio, el Waratah debía fondear en Ciudad del Cabo. Pasó el día y no apareció. Nadie se alarmó demasiado: un retraso de uno o dos días era habitual en aquellos tiempos.",
+      "prompt_imagen": "Cape Town harbor quay in 1909 at dusk, small groups of people in period clothing looking out toward an empty sea, Table Mountain silhouette in the background, soft hazy light."
+    },
+    {
+      "narracion": "Pero el barco no llevaba telegrafía sin hilos. Si algo salía mal, nadie podía oír su llamada. Y los días se convirtieron en semanas, mientras la inquietud crecía en los muelles, en los periódicos y en las casas de quienes esperaban.",
+      "prompt_imagen": "Vintage newspaper office desk with stacked papers, a dim oil lamp, a ship's model and a nautical chart of the African coast, anxious atmosphere, sepia tones, no legible text."
+    },
+    {
+      "narracion": "Muchos se negaban a aceptar lo peor. Faltaban tres años para el Titanic y la fe en los barcos modernos era absoluta. Con doble fondo y compartimentos estancos, el Waratah parecía imposible de hundir.",
+      "prompt_imagen": "Cutaway-style vintage engineering drawing of a large steamship hull with watertight compartments, spread on a wooden table under warm lamplight, brass instruments and rolled blueprints nearby, no text."
+    },
+    {
+      "narracion": "La hipótesis más repetida era que se había quedado sin máquinas y flotaba a la deriva, con provisiones para meses. Había precedentes: otro vapor, en 1899, derivó unas dos mil quinientas millas durante cien días antes de ser rescatado.",
+      "prompt_imagen": "Lone disabled steamship drifting on a vast empty ocean under a pale sky, no smoke from its funnel, still water at dawn, sense of isolation and endless horizon."
+    },
+    {
+      "narracion": "El 1 de agosto salió el remolcador T. E. Fuller, pero el mal tiempo lo obligó a volver. Después se sumaron los cruceros de la Armada británica Pandora, Forte y Hermes. Rastrearon la zona donde se vio al barco por última vez.",
+      "prompt_imagen": "Three Edwardian-era Royal Navy cruisers steaming in line through rough grey seas, dark smoke trailing from their funnels, lookouts scanning the horizon, overcast stormy sky."
+    },
+    {
+      "narracion": "Las olas eran tan enormes que el Hermes sufrió daños en el casco y debió entrar en dique seco. El mar que se había tragado al Waratah castigaba también a quienes lo buscaban.",
+      "prompt_imagen": "Old warship resting in a dry dock with its battered hull exposed, workers in period clothes inspecting dented steel plates, wet stone walls, cold gray daylight."
+    },
+    {
+      "narracion": "El 10 de agosto, el aviso de un barco de la Blue Anchor rumbo a Durban encendió esperanzas, pero resultó falso. En septiembre, la naviera fletó el carguero Sabine, que recorrió catorce mil millas sin hallar nada.",
+      "prompt_imagen": "Cargo steamer sailing alone across a wide empty ocean, a sailor on deck raising binoculars toward the horizon, pale morning light, calm but desolate sea."
+    },
+    {
+      "narracion": "El 15 de diciembre, más de cuatro meses después, Lloyd's de Londres lo declaró oficialmente desaparecido. Pero los familiares no se rindieron. En 1910 fletaron el Wakefield, que pasó otros cuatro meses buscando y cubrió quince mil millas más. Tampoco encontró nada.",
+      "prompt_imagen": "Dimly lit insurance hall in London, 1909, a large wooden board with chalk marks, men in dark coats and top hats standing in silence, a few women in black dresses watching, no readable text."
+    },
+    {
+      "narracion": "Ni un bote a la deriva, ni un resto confirmado, ni una sola pista en miles de millas de mar. Doscientas once personas se habían desvanecido, y el océano guardó silencio, como si el barco nunca hubiese existido.",
+      "prompt_imagen": "Endless dark ocean at twilight under a heavy sky, perfectly empty water stretching to the horizon, faint mist on the surface, haunting stillness, no ships or land visible."
+    },
+    {
+      "narracion": "Quizá el barco se volcó en segundos bajo una ola gigante, como soñó Sawyer. Quizá estalló una caldera. Nadie lo sabe. Y en algún lugar de esas aguas, el Waratah sigue esperando, como un nombre sin tumba.",
+      "prompt_imagen": "Deep underwater view of the dark seabed, faint rays of light fading from the surface far above, a vague shadowy shape of a ship's hull half buried in sand, eerie blue-green gloom."
+    }
+  ]
+}

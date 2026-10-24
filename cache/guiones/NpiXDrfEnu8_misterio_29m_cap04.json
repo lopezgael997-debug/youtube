@@ -1,0 +1,33 @@
+{
+  "escenas": [
+    {
+      "narracion": "El 5 de noviembre de 1908, el Waratah zarpó de Londres rumbo a Australia. Era su viaje inaugural. En el muelle, las banderas, los pañuelos y las despedidas de siempre. Nadie imaginaba que aquella travesía sería apenas el ensayo de una historia mucho más oscura.",
+      "prompt_imagen": "Large black-hulled steamship with a black and white funnel leaving a crowded London dock at dawn, thin mist over the Thames, waving crowds on the quay, cold golden light, early twentieth century atmosphere."
+    },
+    {
+      "narracion": "Al mando iba el capitán Joshua Edward Ilbury. Un lobo de mar con más de treinta años de experiencia, hombre respetado, de los que no se asustan por cualquier crujido del casco. Si alguien podía domar a aquel gigante, era él.",
+      "prompt_imagen": "Silhouette of an elderly ship captain in a dark naval coat and peaked cap, standing on the bridge wing of a steamship, gripping the rail, grey sea and overcast sky behind him, dramatic moody light."
+    },
+    {
+      "narracion": "Aquel viaje debía demostrar de lo que era capaz el buque más grande y lujoso de toda la flota de la Blue Anchor Line. Su ruta lo llevaría de Londres hasta Australia, al otro lado del mundo, una distancia que ponía a prueba a cualquier máquina.",
+      "prompt_imagen": "Antique world map spread on a wooden navigation table in a ship's chart room, a brass compass and dividers resting on it, a long route inked toward Australia, warm lamplight, vintage maritime mood."
+    },
+    {
+      "narracion": "Todo parecía marchar según lo previsto. Las máquinas rugían, los salones brillaban y los pasajeros disfrutaban de un lujo poco común. Pero bajo cubierta, lejos de la vista de los pasajeros, se gestaba el primer susto.",
+      "prompt_imagen": "Elegant first class saloon of an early twentieth century steamship, polished wood panels, brass lamps, velvet chairs, empty and softly lit, a faint tremor of vibration suggested by rippling water in a glass."
+    },
+    {
+      "narracion": "Un incendio estalló en la sala de máquinas. Allí, entre calderas, vapor y metal al rojo, el fuego es el peor enemigo posible de un buque. Un barco puede resistir una tormenta, pero un incendio en sus entrañas es otra historia.",
+      "prompt_imagen": "Cavernous steamship engine room with massive boilers and pipes, orange flames and thick black smoke licking up from one corner, silhouettes of stokers with shovels, harsh glowing red light, tense atmosphere."
+    },
+    {
+      "narracion": "Imaginemos la escena: el calor sofocante, el humo espeso, los fogoneros gritando órdenes entre el estruendo de las máquinas. Mientras tanto, arriba, en los salones, la música quizá seguía sonando.",
+      "prompt_imagen": "Dark smoky ship corridor below deck, sooty steam drifting past riveted iron walls, a single swinging lantern casting long shadows, distant glow of fire at the end of the passage, claustrophobic mood."
+    },
+    {
+      "narracion": "La tripulación reaccionó con rapidez y el fuego quedó controlado. El barco siguió su camino hacia el otro lado del mundo, como si nada hubiera pasado. Pero un incendio en un barco nuevo no es un detalle menor.",
+      "prompt_imagen": "Steamship sailing calmly across a wide blue ocean under a bright sky, a thin wisp of grey smoke rising from its funnel, long white wake behind it, sense of calm hiding unease."
+    },
+    {
+      "narracion": "Las reparaciones se hicieron en Sídney. Luego, el Waratah completó el viaje y emprendió el regreso. El 7 de marzo de 1909 volvió a amarrar en Londres. A simple vista, el viaje inaugural había terminado bien.",
+      "prompt_imagen": "Steamship tied up at a

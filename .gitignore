@@ -1,5 +1,6 @@
 # Dependencias de Node.js (¡NUNCA deben subirse!)
 node_modules/
+cache/
 
 # Variables de entorno y secretos (¡CRÍTICO!)
 .env

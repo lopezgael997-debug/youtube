@@ -1,5 +1,4 @@
 require('dotenv').config();
-const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 const { YoutubeTranscript } = require('youtube-transcript');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs').promises;
@@ -42,6 +41,13 @@ const CFG = {
     minutosPorCapitulo: 3,
     umbralCapituloCorto: 0.8, // si un capítulo trae menos del 80% de las palabras pedidas, se amplía
     maxCharsTranscripcion: 60000,
+
+    // Voz: AllTalk TTS (instalado con Pinokio). Debe estar ENCENDIDO mientras corre el worker.
+    alltalk: {
+        url: (process.env.ALLTALK_URL || 'http://127.0.0.1:7851').replace(/\/$/, ''),
+        idioma: process.env.ALLTALK_IDIOMA || 'es',
+        concurrencia: Number(process.env.ALLTALK_CONCURRENCIA || 1)
+    },
 
     fps: 30,
     pausaEscena: 0.35,
@@ -87,23 +93,27 @@ const DIR = {
     musica: path.join(__dirname, 'musica')
 };
 
+// Nombres de archivo .wav que existen en la carpeta "voices" de AllTalk.
+// Si un nicho no tiene su propia voz, usa VOZ_DEFAULT (cámbiala en .env con VOZ_DEFAULT=mi_voz.wav).
+const VOZ_DEFAULT = process.env.VOZ_DEFAULT || 'voz_misterio.wav';
+
 const NICHOS = {
     misterio: {
         audiencia: 'personas mayores de 50 años de habla hispana, apasionadas por los misterios históricos, la arqueología prohibida y los enigmas sin resolver',
         tono: 'misterio, intriga y respeto, similar a los documentales clásicos',
-        voz: 'es-MX-JorgeNeural',
+        voz: process.env.VOZ_MISTERIO || VOZ_DEFAULT,
         estilo: 'cinematic dramatic lighting, moody atmosphere, volumetric fog, ancient, oil painting style, highly detailed, dark tones'
     },
     historia: {
         audiencia: 'adultos de habla hispana interesados en historia universal y grandes personajes',
         tono: 'narrativo, riguroso y apasionante, como un buen documental histórico',
-        voz: 'es-ES-AlvaroNeural',
+        voz: process.env.VOZ_HISTORIA || VOZ_DEFAULT,
         estilo: 'epic historical painting, realistic, warm cinematic lighting, highly detailed, museum quality'
     },
     ciencia: {
         audiencia: 'público curioso de habla hispana que disfruta la divulgación científica',
         tono: 'claro, entusiasta y sorprendente, sin tecnicismos innecesarios',
-        voz: 'es-MX-DaliaNeural',
+        voz: process.env.VOZ_CIENCIA || VOZ_DEFAULT,
         estilo: 'clean cinematic illustration, vivid colors, dramatic lighting, highly detailed, sharp focus'
     },
 
@@ -111,7 +121,7 @@ const NICHOS = {
     iceberg: {
         audiencia: 'jóvenes y adultos de habla hispana a quienes les fascinan los videos de "iceberg": historias, casos y datos del mundo ordenados desde lo más conocido hasta lo más oscuro y desconocido',
         tono: 'inmersivo, curioso y cada vez más inquietante a medida que se desciende, siempre riguroso',
-        voz: 'es-US-AlonsoNeural',
+        voz: process.env.VOZ_ICEBERG || VOZ_DEFAULT,
         estilo: 'cinematic polar and underwater scene, deep blue and teal tones, dramatic lighting, volumetric depth, highly detailed',
         estructura: `Es un video de "iceberg" que desciende por niveles. Cada capítulo es UN NIVEL del iceberg (puede incluir 2 o 3 casos o historias dentro del nivel):
 - Nivel 1, "La superficie": lo que casi todos conocen.
@@ -125,7 +135,7 @@ Los prompt_imagen reflejan la profundidad: los primeros niveles son luminosos y 
     finanzas: {
         audiencia: 'adultos de habla hispana que quieren entender mejor su dinero: ahorro, deudas, presupuesto, inversión básica y economía cotidiana',
         tono: 'claro, tranquilo, cercano y práctico, sin tecnicismos ni promesas de enriquecimiento rápido',
-        voz: 'es-MX-DaliaNeural',
+        voz: process.env.VOZ_FINANZAS || VOZ_DEFAULT,
         estilo: 'clean modern editorial illustration, soft natural light, warm neutral tones, everyday scenes, coins and household objects, no readable text or numbers, highly detailed',
         reglas: `- Es contenido EDUCATIVO: explica conceptos y opciones, nunca des recomendaciones personalizadas de inversión ni digas "compra" o "vende" algo concreto.
 - No prometas ni insinúes ganancias seguras, rendimientos garantizados ni formas de hacerse rico rápido. Menciona siempre los riesgos.
@@ -135,7 +145,7 @@ Los prompt_imagen reflejan la profundidad: los primeros niveles son luminosos y 
     metafisica: {
         audiencia: 'adultos de habla hispana curiosos por la espiritualidad, la conciencia, la reencarnación y las vidas pasadas',
         tono: 'sereno, contemplativo y respetuoso; invita a reflexionar sin imponer creencias',
-        voz: 'es-US-PalomaNeural',
+        voz: process.env.VOZ_METAFISICA || VOZ_DEFAULT,
         estilo: 'ethereal cinematic scene, soft glowing light, gentle mist, cosmic and nature elements, serene atmosphere, golden and violet tones, highly detailed',
         reglas: `- Presenta las vidas pasadas, la reencarnación y la metafísica como CREENCIAS, tradiciones, relatos o experiencias de personas, NUNCA como hechos comprobados. Usa expresiones como "según la tradición...", "quienes lo creen...", "algunos relatos cuentan...".
 - Cuando existan estudios o casos documentados, preséntalos con su contexto e incluye brevemente la postura escéptica o científica.
@@ -735,18 +745,60 @@ function limpiarTextoParaVoz(texto) {
 }
 
 async function sintetizar(texto, voz) {
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(voz, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-    const resultado = await tts.toStream(texto);
-    const stream = resultado.audioStream || resultado; // compatible con msedge-tts v1 y v2
-    const chunks = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    return Buffer.concat(chunks);
+    const A = CFG.alltalk;
+    console.log(`[Voz] Generando audio con AllTalk (${voz})...`);
+
+    // Nombre único por petición para que dos audios nunca se pisen entre sí
+    const nombreSalida = `worker_${hash(voz + '|' + texto)}_${crypto.randomBytes(3).toString('hex')}`;
+
+    let respuesta;
+    try {
+        respuesta = await fetch(`${A.url}/api/tts-generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                text_input: texto,
+                text_filtering: 'standard',
+                character_voice_gen: voz,   // archivo .wav dentro de la carpeta "voices" de AllTalk
+                narrator_enabled: 'false',
+                language: A.idioma,         // fuerza el español siempre
+                output_file_name: nombreSalida,
+                output_file_timestamp: 'false',
+                autoplay: 'false'
+            })
+        });
+    } catch (e) {
+        throw new Error(`No se pudo conectar con AllTalk en ${A.url}. ¿Está encendido en Pinokio? (${e.message})`);
+    }
+
+    if (!respuesta.ok) {
+        throw new Error(`Error en el servidor AllTalk: ${respuesta.status}`);
+    }
+
+    const textoRespuesta = await respuesta.text();
+    let json;
+    try { json = JSON.parse(textoRespuesta); }
+    catch { throw new Error(`AllTalk no devolvió un JSON válido: ${textoRespuesta.slice(0, 200)}`); }
+
+    if (json.status && !/success/i.test(json.status)) {
+        throw new Error(`AllTalk no pudo generar el audio: ${json.error_message || json.message || json.status}`);
+    }
+
+    // AllTalk puede devolver una ruta (/audio/x.wav) o una URL completa (http://.../audio/x.wav)
+    const rutaAudio = json.output_file_url || json.audio_file || json.url;
+    if (!rutaAudio) {
+        throw new Error('AllTalk generó el audio pero no devolvió el enlace correcto.');
+    }
+    const urlAudio = /^https?:\/\//i.test(rutaAudio) ? rutaAudio : `${A.url}${rutaAudio.startsWith('/') ? '' : '/'}${rutaAudio}`;
+
+    const resAudio = await fetch(urlAudio);
+    if (!resAudio.ok) throw new Error(`No se pudo descargar el audio de AllTalk (${resAudio.status})`);
+    return Buffer.from(await resAudio.arrayBuffer());
 }
 
 async function audioDeEscena(texto, voz) {
     const limpio = limpiarTextoParaVoz(texto);
-    const archivo = path.join(DIR.audio, `${hash(voz + '|' + limpio)}.mp3`);
+    const archivo = path.join(DIR.audio, `${hash(voz + '|' + limpio)}.wav`);
     if (await existe(archivo)) return archivo;
 
     for (let intento = 1; intento <= 3; intento++) {
@@ -1022,7 +1074,7 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guia
         const audio = await audioDeEscena(e.narracion, nicho.voz);
         e.duracion = (await duracionAudio(audio)) + CFG.pausaEscena;
         return audio;
-    }), 2);
+    }), CFG.alltalk.concurrencia);
     const segundos = escenas.reduce((a, e) => a + e.duracion, 0);
     const palabras = palabrasDeEscenas(escenas);
     console.log(`[Locutor] ⏱️ Duración real de la narración: ${(segundos / 60).toFixed(1)} min (${palabras} palabras)`);

@@ -39,6 +39,9 @@ const CFG = {
     // Palabras por minuto de la voz. Se autocalibra con tus videos reales (cache/calibracion.json)
     palabrasPorMinuto: Number(process.env.WPM || 150),
     minutosPorCapitulo: 3,
+    // Palabras por escena: cada escena = 1 imagen. Más cortas = más imágenes distintas (más fieles a la narración)
+    escenaMin: Number(process.env.ESCENA_PALABRAS_MIN || 20),
+    escenaMax: Number(process.env.ESCENA_PALABRAS_MAX || 35),
     umbralCapituloCorto: 0.8, // si un capítulo trae menos del 80% de las palabras pedidas, se amplía
     maxCharsTranscripcion: 60000,
 
@@ -102,19 +105,28 @@ const NICHOS = {
         audiencia: 'personas mayores de 50 años de habla hispana, apasionadas por los misterios históricos, la arqueología prohibida y los enigmas sin resolver',
         tono: 'misterio, intriga y respeto, similar a los documentales clásicos',
         voz: process.env.VOZ_MISTERIO || VOZ_DEFAULT,
-        estilo: 'cinematic dramatic lighting, moody atmosphere, volumetric fog, ancient, oil painting style, highly detailed, dark tones'
+        estilo: 'cinematic dramatic lighting, moody atmosphere, oil painting style, highly detailed, dark tones',
+        estructura: `Estructura de "caso misterioso" (cronológica o detectivesca). Cuenta el misterio como una investigación:
+- Apertura: el hecho inexplicable, con un gancho que genere preguntas.
+- Desarrollo: los hechos en orden, las pistas, los testigos y los documentos, uno por uno.
+- Giro: el dato que complica o cambia todo lo anterior.
+- Teorías: las explicaciones posibles (la oficial y las alternativas), cada una con sus pruebas y sus puntos débiles.
+- Cierre: lo que sigue sin resolverse y una pregunta que deje al público pensando.
+Reparte estas partes a lo largo de los capítulos, en ese orden. No uses niveles ni estructura de iceberg.`,
     },
     historia: {
         audiencia: 'adultos de habla hispana interesados en historia universal y grandes personajes',
         tono: 'narrativo, riguroso y apasionante, como un buen documental histórico',
         voz: process.env.VOZ_HISTORIA || VOZ_DEFAULT,
-        estilo: 'epic historical painting, realistic, warm cinematic lighting, highly detailed, museum quality'
+        estilo: 'epic historical painting, realistic, warm cinematic lighting, highly detailed, museum quality',
+        estructura: `Estructura de relato histórico narrativo, en orden cronológico claro: contexto de la época → personajes y motivaciones → el momento decisivo → consecuencias → legado. Cuenta los hechos como una historia con personas, no como una lista de fechas. No uses niveles ni estructura de iceberg.`,
     },
     ciencia: {
         audiencia: 'público curioso de habla hispana que disfruta la divulgación científica',
         tono: 'claro, entusiasta y sorprendente, sin tecnicismos innecesarios',
         voz: process.env.VOZ_CIENCIA || VOZ_DEFAULT,
-        estilo: 'clean cinematic illustration, vivid colors, dramatic lighting, highly detailed, sharp focus'
+        estilo: 'clean cinematic illustration, vivid colors, dramatic lighting, highly detailed, sharp focus',
+        estructura: `Estructura de divulgación científica: parte de una pregunta o paradoja que intrigue → explica en capas, de lo simple a lo complejo, con analogías cotidianas → incluye un dato que sorprenda → termina con lo que significa para la vida real o con lo que aún falta por descubrir. No uses niveles ni estructura de iceberg.`,
     },
 
     // "estructura" se aplica al plan y a cada capítulo; "reglas" se aplica a TODAS las llamadas de ese canal
@@ -122,13 +134,13 @@ const NICHOS = {
         audiencia: 'jóvenes y adultos de habla hispana a quienes les fascinan los videos de "iceberg": historias, casos y datos del mundo ordenados desde lo más conocido hasta lo más oscuro y desconocido',
         tono: 'inmersivo, curioso y cada vez más inquietante a medida que se desciende, siempre riguroso',
         voz: process.env.VOZ_ICEBERG || VOZ_DEFAULT,
-        estilo: 'cinematic polar and underwater scene, deep blue and teal tones, dramatic lighting, volumetric depth, highly detailed',
+        estilo: 'cinematic dramatic lighting, deep blue and teal color palette, volumetric depth, highly detailed',
         estructura: `Es un video de "iceberg" que desciende por niveles. Cada capítulo es UN NIVEL del iceberg (puede incluir 2 o 3 casos o historias dentro del nivel):
 - Nivel 1, "La superficie": lo que casi todos conocen.
 - Los niveles intermedios: datos y casos cada vez menos conocidos.
 - El último nivel, "Las profundidades": lo más oscuro, extraño o desconocido, pero REAL y documentado.
 Al empezar cada capítulo, anuncia el nivel con una frase corta y atmosférica (por ejemplo: "Bajamos al nivel 3...").
-Los prompt_imagen reflejan la profundidad: los primeros niveles son luminosos y despejados; los profundos, cada vez más oscuros, fríos y submarinos.`,
+En los prompt_imagen, la profundidad solo cambia la luz y el color (luminoso arriba, cada vez más oscuro y frío abajo); el CONTENIDO de cada imagen es lo que dice su escena, no un iceberg ni el mar.`,
         reglas: `- Incluye solo casos reales y verificables. En las profundidades es tentador inventar: no lo hagas. Si algo no está confirmado, dilo ("se cree que", "no hay pruebas concluyentes").
 - Trata los temas oscuros con respeto y sin violencia gráfica ni detalles morbosos.`
     },
@@ -136,7 +148,8 @@ Los prompt_imagen reflejan la profundidad: los primeros niveles son luminosos y 
         audiencia: 'adultos de habla hispana que quieren entender mejor su dinero: ahorro, deudas, presupuesto, inversión básica y economía cotidiana',
         tono: 'claro, tranquilo, cercano y práctico, sin tecnicismos ni promesas de enriquecimiento rápido',
         voz: process.env.VOZ_FINANZAS || VOZ_DEFAULT,
-        estilo: 'clean modern editorial illustration, soft natural light, warm neutral tones, everyday scenes, coins and household objects, no readable text or numbers, highly detailed',
+        estilo: 'clean modern editorial illustration, soft natural light, warm neutral tones, no readable text or numbers, highly detailed',
+        estructura: `Estructura práctica y educativa, en tono de conversación tranquila: una situación cotidiana que el público reconoce → el concepto explicado con palabras simples → un ejemplo con números ilustrativos (dichos como ejemplo) → errores comunes → opciones y cosas a considerar (sin recomendar nada concreto) → cierre con una idea clave. Nada de relatos bélicos, misterios ni niveles de iceberg.`,
         reglas: `- Es contenido EDUCATIVO: explica conceptos y opciones, nunca des recomendaciones personalizadas de inversión ni digas "compra" o "vende" algo concreto.
 - No prometas ni insinúes ganancias seguras, rendimientos garantizados ni formas de hacerse rico rápido. Menciona siempre los riesgos.
 - Usa cifras solo si vienen del material y preséntalas como ejemplos o aproximaciones; no inventes porcentajes ni estadísticas.
@@ -146,7 +159,8 @@ Los prompt_imagen reflejan la profundidad: los primeros niveles son luminosos y 
         audiencia: 'adultos de habla hispana curiosos por la espiritualidad, la conciencia, la reencarnación y las vidas pasadas',
         tono: 'sereno, contemplativo y respetuoso; invita a reflexionar sin imponer creencias',
         voz: process.env.VOZ_METAFISICA || VOZ_DEFAULT,
-        estilo: 'ethereal cinematic scene, soft glowing light, gentle mist, cosmic and nature elements, serene atmosphere, golden and violet tones, highly detailed',
+        estilo: 'ethereal cinematic lighting, soft glowing light, gentle mist, serene atmosphere, golden and violet tones, highly detailed',
+        estructura: `Estructura contemplativa y descriptiva. NO es una historia lineal ni un iceberg: cada capítulo explora una faceta del tema (qué dice la tradición, cómo se describe la experiencia, relatos y casos documentados con la mirada escéptica, qué invita a reflexionar), con lenguaje sensorial y pausado que invite a la introspección. Alterna la descripción de las ideas con preguntas reflexivas al público. Cierra con una reflexión serena, no con un giro de suspenso. No uses niveles de iceberg ni relatos históricos bélicos.`,
         reglas: `- Presenta las vidas pasadas, la reencarnación y la metafísica como CREENCIAS, tradiciones, relatos o experiencias de personas, NUNCA como hechos comprobados. Usa expresiones como "según la tradición...", "quienes lo creen...", "algunos relatos cuentan...".
 - Cuando existan estudios o casos documentados, preséntalos con su contexto e incluye brevemente la postura escéptica o científica.
 - No hagas promesas de sanación ni afirmaciones médicas o psicológicas; no sugieras dejar tratamientos ni sustituir a médicos o terapeutas. No promociones terapias, cursos ni productos.
@@ -451,8 +465,9 @@ async function obtenerTranscripcion(url, idVideo) {
 function promptSistema(nicho) {
     return `Eres un guionista experto en YouTube. Tu audiencia son ${nicho.audiencia}.
 Escribes en español neutro con un tono de ${nicho.tono}.
-${nicho.reglas ? '\nReglas específicas de este canal (tienen prioridad):\n' + nicho.reglas + '\n' : ''}
+${nicho.enfoque ? 'Enfoque específico de este canal: ' + nicho.enfoque + '\n' : ''}${nicho.reglas ? '\nReglas específicas de este canal (tienen prioridad):\n' + nicho.reglas + '\n' : ''}
 Reglas permanentes de contenido:
+- El material de referencia solo aporta el TEMA y los datos. La forma de contarlo (estructura, tono y enfoque) la define ESTE canal: no copies la organización del video original.
 - Reescribe con tus propias palabras; nunca copies frases del material original.
 - Elimina promociones, saludos y "paja" del youtuber original.
 - No inventes datos, fechas, cifras ni citas. Si el material no alcanza, completa con contexto histórico o científico ampliamente aceptado y presenta lo incierto como hipótesis ("según algunas teorías...").
@@ -466,9 +481,12 @@ Reglas de retención (que la gente no se vaya):
 - Evita el lenguaje robótico y las muletillas: "en este video", "sin más preámbulos", "es importante destacar", "en conclusión", "cabe mencionar".
 
 Reglas de imagen (muy importantes para que lo que se ve coincida con lo que se dice):
-- Cada "prompt_imagen" va en INGLÉS, tiene 20 a 40 palabras y describe EXACTAMENTE lo que ocurre en esa escena: el momento concreto, el lugar y los objetos que menciona la narración. Empieza por el sujeto principal.
-- Repite con las mismas palabras los elementos recurrentes (por ejemplo, el mismo barco, la misma época, el mismo lugar) para que las imágenes sean coherentes entre sí.
-- Sin texto ni letras en la imagen y sin rostros reconocibles de personas reales: usa siluetas, escenas de espaldas, manos, objetos o paisajes.
+- Cada "prompt_imagen" va en INGLÉS, de 20 a 35 palabras, y muestra LO QUE DICE ESA ESCENA, no el tema general del video: la acción concreta, las personas, los objetos y el lugar que menciona su narración. Empieza por el sujeto principal.
+- Si la narración habla de una persona haciendo algo, muestra a esa persona haciéndolo (plano medio o cercano, con la ropa y la expresión de la época). Si habla de un objeto, muéstralo en primer plano. Si habla de una idea abstracta, usa UNA metáfora visual concreta ligada a lo que se dice.
+- Varía el encuadre entre escenas seguidas (plano general, medio, primer plano, detalle, vista aérea, contrapicado).
+- No metas en la imagen elementos del tema general (por ejemplo barcos, mar, faros) si esa escena no los menciona. Cada imagen se describe solo con lo que dice SU escena.
+- Si un personaje u objeto reaparece, descríbelo con las mismas palabras, pero solo en las escenas donde la narración lo menciona.
+- Sin texto ni letras en la imagen. No nombres a personas reales: describe un personaje genérico de la época.
 
 Respondes ÚNICAMENTE con JSON válido, sin texto adicional ni bloques de código.`;
 }
@@ -608,7 +626,7 @@ async function obtenerGuion(proyecto, canal, nicho, idVideo, minutos) {
 El primer capítulo debe abrir con un gancho espectacular y el último cerrar de forma memorable.
 Sé breve: cada "resumen" de capítulo tiene máximo 30 palabras.
 ${bloquePrevios}${bloqueEstructura}
-Incluye una "guia_visual": en INGLÉS, máximo 30 palabras, que fije el mundo visual de todo el video (época, lugar, aspecto de los objetos o personajes recurrentes, paleta de colores) para que todas las imágenes sean coherentes.
+Incluye una "guia_visual": en INGLÉS, máximo 15 palabras, que fije SOLO el aspecto general de todo el video: época, paleta de colores, tipo de luz y textura. NO incluyas objetos, lugares, vehículos ni personajes concretos (nada de barcos, mar, edificios, etc.), porque esta guía se añade a TODAS las imágenes.
 
 Responde con este JSON:
 {
@@ -629,7 +647,7 @@ Responde con este JSON:
     );
     const guiaVisual = typeof plan.guia_visual === 'string' ? plan.guia_visual : '';
     const bloqueGuia = guiaVisual
-        ? `\nGUÍA VISUAL FIJA (úsala en los prompt_imagen para que todas las imágenes sean coherentes): ${guiaVisual}\n`
+        ? `\nGUÍA VISUAL FIJA (solo época, colores y luz; no la conviertas en contenido de las escenas): ${guiaVisual}\n`
         : '';
 
     // --- 2) Capítulos (se amplían si quedan cortos) ---
@@ -654,7 +672,7 @@ Escribe AHORA solo el capítulo ${i + 1} de ${total}: "${capPlan.titulo}".
 - Longitud: entre ${palabrasCap} y ${Math.round(palabrasCap * 1.2)} palabras de narración en total. No te quedes corto.
 - ${i === 0 ? 'Empieza con un gancho espectacular en los primeros 15 segundos.' : 'Continúa con naturalidad, sin saludar ni repetir la introducción. Viene después de: "' + previo + '"'}
 - ${i === total - 1 ? 'Este es el último capítulo: cierra de forma memorable.' : 'No cierres la historia: deja la tensión abierta para el siguiente capítulo.'}
-- Divide en escenas de 1 a 3 oraciones (30 a 50 palabras cada una).
+- Divide en escenas de 1 o 2 oraciones (${CFG.escenaMin} a ${CFG.escenaMax} palabras cada una). Cada escena tendrá UNA imagen, así que cada escena debe tratar de una sola cosa visual.
 
 JSON:
 { "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description of exactly this scene" } ] }`
@@ -677,7 +695,7 @@ ${JSON.stringify(cap.escenas)}
 
 Quedó corta: tiene ${palabrasCapReal} palabras y el objetivo es de ${palabrasCap} a ${Math.round(palabrasCap * 1.2)}.
 Reescribe el capítulo COMPLETO ampliándolo: añade detalles concretos del material, contexto, descripciones de lugares y momentos, y tensión narrativa. No repitas ideas ni rellenes con frases vacías. Conserva el mismo inicio y ${i === total - 1 ? 'un cierre memorable' : 'la tensión abierta al final'}.
-Escenas de 1 a 3 oraciones (30 a 50 palabras).
+Escenas de 1 o 2 oraciones (${CFG.escenaMin} a ${CFG.escenaMax} palabras), cada una con una sola idea visual.
 
 JSON:
 { "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description of exactly this scene" } ] }`
@@ -711,7 +729,7 @@ async function obtenerShorts(guion, nicho, cantidad) {
         async () => {
             console.log(`[Guionista] 📱 Escribiendo ${cantidad} shorts...`);
             const bloqueGuia = guion.guia_visual
-                ? `\nGUÍA VISUAL FIJA (úsala en los prompt_imagen): ${guion.guia_visual}\n`
+                ? `\nGUÍA VISUAL FIJA (solo época, colores y luz; no la conviertas en contenido de las escenas): ${guion.guia_visual}\n`
                 : '';
             return llamarClaude({
                 modelo: CFG.modeloEconomico, nicho, contexto: null, maxTokens: 8000, esfuerzo: CFG.efforts.plan,
@@ -815,6 +833,57 @@ async function audioDeEscena(texto, voz) {
 }
 
 // =====================================================================
+// AGENTE DIRECTOR DE ARTE: un prompt de imagen fiel a CADA narración
+// =====================================================================
+async function refinarPromptsImagen(escenas, nicho, guiaVisual, tema, etiqueta) {
+    const LOTE = 12;
+    let mejorados = 0;
+    for (let ini = 0; ini < escenas.length; ini += LOTE) {
+        const grupo = escenas.slice(ini, ini + LOTE);
+        const huella = hash(grupo.map(e => e.narracion).join('|') + '|' + guiaVisual + '|' + (tema || '') + '|v1');
+        const archivo = path.join(DIR.guiones, `imgprompts_${huella}.json`);
+        const anterior = ini > 0 ? escenas[ini - 1].narracion : '';
+        try {
+            const datos = await jsonConCache(
+                archivo,
+                async () => llamarClaude({
+                    modelo: CFG.modeloEconomico, nicho, contexto: null, maxTokens: 4000, esfuerzo: CFG.efforts.plan,
+                    instruccion: `Eres el director de arte de un documental. Para cada escena escribe el prompt de imagen (en INGLÉS, 20 a 35 palabras) que muestre EXACTAMENTE lo que dice su narración.
+
+Tema del video (solo para entender la época y el lugar): ${tema || 'sin dato'}
+Aspecto general fijo (solo época, color y luz; NO es contenido): ${guiaVisual || 'ninguno'}
+${anterior ? 'Escena anterior (solo para seguir el hilo, NO la dibujes): ' + anterior + '\n' : ''}
+ESCENAS:
+${grupo.map((e, k) => `[${k}] ${e.narracion}`).join('\n')}
+
+Reglas:
+- Dibuja solo lo que dice ESA escena: la acción concreta, las personas, los objetos y el lugar. Si la narración habla de un hombre empapado en sangre, la imagen muestra a un hombre empapado en sangre (dramático, sin gore extremo); si habla de una puerta que se abre, muestra la puerta abriéndose.
+- Empieza por el sujeto principal. Incluye el encuadre (wide shot, medium shot, close-up, detail, aerial, low angle) y varíalo entre escenas seguidas.
+- Las personas se describen como personajes genéricos de la época (ropa, edad, expresión). No nombres personas reales.
+- No repitas elementos del tema general (barcos, mar, faros, torres, etc.) si esa escena no los menciona.
+- Si la escena es una idea abstracta, usa UNA metáfora visual concreta ligada a lo que dice.
+- Sin texto ni letras en la imagen.
+
+Responde con este JSON, con EXACTAMENTE ${grupo.length} prompts en el mismo orden:
+{ "prompts": ["prompt de la escena 0", "prompt de la escena 1"] }`
+                }),
+                (d) => {
+                    if (!Array.isArray(d.prompts) || d.prompts.length !== grupo.length || d.prompts.some(x => typeof x !== 'string' || x.trim().length < 10)) {
+                        throw new Error(`Se esperaban ${grupo.length} prompts de imagen.`);
+                    }
+                },
+                true
+            );
+            grupo.forEach((e, k) => { e.prompt_imagen = datos.prompts[k].replace(/\s+/g, ' ').trim(); });
+            mejorados += grupo.length;
+        } catch (e) {
+            console.log(`[Director de arte] ⚠️ No se pudieron mejorar las escenas ${ini + 1}-${ini + grupo.length} (${e.message}). Se usan los prompts originales.`);
+        }
+    }
+    console.log(`[Director de arte] 🖼️ ${etiqueta}: ${mejorados}/${escenas.length} prompts de imagen escritos a partir de la narración.`);
+}
+
+// =====================================================================
 // AGENTE PINTOR: imágenes con IA en tu GPU (ComfyUI o Forge/A1111)
 // =====================================================================
 let imagenIAverificada = false;
@@ -910,7 +979,8 @@ async function imagenForge(prompt, semilla, formato) {
 // Orden del prompt: primero la escena (lo más importante), luego la guía visual y por último el estilo del nicho
 async function generarImagen(promptEscena, nicho, formato, guiaVisual) {
     const I = CFG.imagen;
-    const prompt = [promptEscena, guiaVisual, nicho.estilo].filter(Boolean).join(', ');
+    const escena = String(promptEscena).replace(/[()\[\]{}:]/g, ' ').replace(/\s+/g, ' ').trim();
+    const prompt = [`(${escena}:1.25)`, guiaVisual, nicho.estilo].filter(Boolean).join(', ');
     const archivo = path.join(DIR.imagenes, `${hash([prompt, formato.imgAncho, formato.imgAlto, I.proveedor, I.checkpoint, I.pasos].join('|'))}.png`);
     if (await existe(archivo)) return archivo;
 
@@ -1062,7 +1132,7 @@ async function ensamblarVideo({ clips, escenas, carpeta, nichoKey, destinoFinal,
 }
 
 // Produce una pieza completa. Devuelve { segundos, palabras } de la narración real.
-async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guiaVisual, carpeta, destinoFinal, onProgreso }) {
+async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guiaVisual, tema, carpeta, destinoFinal, onProgreso }) {
     await fs.mkdir(carpeta, { recursive: true });
     const total = escenas.length;
     const avisar = (f, txt) => { if (onProgreso) onProgreso(f, `${etiqueta}: ${txt}`); };
@@ -1080,7 +1150,9 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guia
     console.log(`[Locutor] ⏱️ Duración real de la narración: ${(segundos / 60).toFixed(1)} min (${palabras} palabras)`);
     avisar(0.12, 'narración lista');
 
-    // 2) Imágenes con IA
+    // 2) Imágenes con IA (primero se escribe un prompt fiel a cada narración)
+    avisar(0.13, 'preparando las imágenes');
+    await refinarPromptsImagen(escenas, nicho, guiaVisual, tema, etiqueta);
     const imagenes = [];
     for (let i = 0; i < total; i++) {
         console.log(`[Pintor] 🎨 ${etiqueta}: imagen ${i + 1}/${total}`);
@@ -1122,7 +1194,7 @@ async function producirVideo(proyecto, reportar) {
         throw new Error(`El canal "${proyecto.canal}" no existe en canales.json. Disponibles: ${CANALES.map(c => c.id).join(', ')}`);
     }
     const nichoKey = canal.nicho;
-    const nicho = { ...NICHOS[nichoKey], voz: canal.voz || NICHOS[nichoKey].voz };
+    const nicho = { ...NICHOS[nichoKey], voz: canal.voz || NICHOS[nichoKey].voz, enfoque: canal.enfoque || '' };
     const idVideo = extraerIdVideo(proyecto.url);
 
     const minutos = Math.min(60, Math.max(1, Number(proyecto.duracion) || CFG.duracionMin));
@@ -1173,7 +1245,7 @@ async function producirVideo(proyecto, reportar) {
     if (!videoListo) {
         const r = await producirPieza({
             etiqueta: 'Video', escenas: guion.escenas, formato: FORMATOS.horizontal,
-            nicho, nichoKey, guiaVisual: guion.guia_visual,
+            nicho, nichoKey, guiaVisual: guion.guia_visual, tema: guion.titulo_youtube,
             carpeta: path.join(DIR.trabajo, String(proyecto.id)), destinoFinal: rutaVideo,
             onProgreso: (f, txt) => reportar({ progreso: 5 + f * tramoVideo, mensaje: txt })
         });
@@ -1205,7 +1277,7 @@ async function producirVideo(proyecto, reportar) {
             try {
                 await producirPieza({
                     etiqueta: `Short ${n}`, escenas: s.escenas, formato: FORMATOS.vertical,
-                    nicho, nichoKey, guiaVisual: guion.guia_visual,
+                    nicho, nichoKey, guiaVisual: guion.guia_visual, tema: s.titulo,
                     carpeta: path.join(DIR.trabajo, `${proyecto.id}_short${n}`), destinoFinal: rutaShort(n),
                     onProgreso: (f, txt) => reportar({ progreso: 65 + (n - 1) * tramoShort + f * tramoShort, mensaje: txt })
                 });

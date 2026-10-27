@@ -1,6 +1,115 @@
 [
-  { "id": "gael_historias", "nombre": "Gael - Archivero Del Tiempo", "nicho": "iceberg" },
-  { "id": "leo_iceberg", "nombre": "Leo – Iceberg del Mundo", "nicho": "iceberg" },
-  { "id": "mama_metafisica", "nombre": "Mamá – Metafísica y Vidas Pasadas", "nicho": "metafisica" },
-  { "id": "papa_misterio", "nombre": "Papá (por definir) – Misterio provisional", "nicho": "misterio" }
+  {
+    "id": "gael_historias",
+    "nombre": "Gael - Archivero Del Tiempo",
+    "nicho": "historia",
+    "miniatura": {
+      "maxPalabras": 4,
+      "plantillas": [
+        "sello",
+        "impacto_izq",
+        "cinema",
+        "dividida"
+      ],
+      "etiquetas": [
+        "EXPEDIENTE ABIERTO",
+        "HISTORIA OCULTA",
+        "ARCHIVO SECRETO"
+      ],
+      "fondoEstilo": "sepia-toned vintage documentary photograph, dramatic chiaroscuro, aged paper tones",
+      "estilo": {
+        "color": "#FFE600",
+        "resalte": "#FF2A2A",
+        "trazo": "#000000",
+        "brillo": 1.05,
+        "saturacion": 1.15,
+        "contraste": 1.2
+      }
+    }
+  },
+  {
+    "id": "leo_iceberg",
+    "nombre": "Leo – Iceberg del Mundo",
+    "nicho": "iceberg",
+    "miniatura": {
+      "maxPalabras": 4,
+      "plantillas": [
+        "nivel",
+        "impacto_izq",
+        "banda",
+        "pregunta"
+      ],
+      "etiquetas": [
+        "LO QUE NADIE DICE",
+        "NIVEL PROHIBIDO",
+        "EL FONDO",
+        "SECRETO"
+      ],
+      "fondoEstilo": "deep blue and teal palette, cold dramatic light, strong sense of depth and scale",
+      "estilo": {
+        "color": "#2BE8FF",
+        "resalte": "#FFFFFF",
+        "trazo": "#001018",
+        "brillo": 1.0,
+        "saturacion": 1.3,
+        "contraste": 1.2
+      }
+    }
+  },
+  {
+    "id": "mama_metafisica",
+    "nombre": "Mamá – Metafísica y Vidas Pasadas",
+    "nicho": "metafisica",
+    "miniatura": {
+      "maxPalabras": 4,
+      "plantillas": [
+        "etereo",
+        "pregunta",
+        "cinema"
+      ],
+      "etiquetas": [
+        "TU ALMA RECUERDA",
+        "VIDAS PASADAS",
+        "MENSAJE"
+      ],
+      "fondoEstilo": "ethereal glowing light, soft mist, golden and violet tones, serene mystical atmosphere",
+      "estilo": {
+        "color": "#FFF4D6",
+        "resalte": "#F5C542",
+        "trazo": "#2A1038",
+        "brillo": 1.05,
+        "saturacion": 1.1,
+        "contraste": 1.1
+      }
+    }
+  },
+  {
+    "id": "papa_misterio",
+    "nombre": "Papá (por definir) – Misterio provisional",
+    "nicho": "misterio",
+    "miniatura": {
+      "maxPalabras": 4,
+      "plantillas": [
+        "sello",
+        "dividida",
+        "pregunta",
+        "impacto_izq",
+        "banda"
+      ],
+      "etiquetas": [
+        "CASO SIN RESOLVER",
+        "DESCLASIFICADO",
+        "SIN EXPLICACIÓN"
+      ],
+      "fondoEstilo": "dark moody noir atmosphere, fog, single harsh light source, high contrast",
+      "estilo": {
+        "color": "#FFFFFF",
+        "resalte": "#FF2A2A",
+        "trazo": "#000000",
+        "brillo": 1.0,
+        "saturacion": 1.2,
+        "contraste": 1.25
+      }
+    }
+  }
 ]

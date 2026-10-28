@@ -14,7 +14,10 @@ async function existe(ruta) {
 }
 
 async function crearCarpetas() {
-    for (const d of Object.values(DIR)) await fs.mkdir(d, { recursive: true });
+    for (const d of Object.values(DIR)) {
+        console.log("Intentando crear carpeta:", d); // <-- Agrega esta línea
+        await fs.mkdir(d, { recursive: true });
+    }
 }
 
 function extraerIdVideo(url) {

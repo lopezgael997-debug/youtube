@@ -1,0 +1,6 @@
+Pon aquí fuentes .ttf u .otf para que las miniaturas se vean más profesionales
+(se cargan solas, sin internet):
+  - Anton            (letra gruesa y condensada, la principal)
+  - Bebas Neue       (alternativa)
+  - Cinzel           (letra elegante para el canal de metafísica)
+Se descargan gratis de fonts.google.com. Si esta carpeta está vacía, se usa Impact.

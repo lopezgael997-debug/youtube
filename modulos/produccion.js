@@ -8,7 +8,7 @@ const { generarImagen } = require('./agente_pintor');
 const { renderizarEscena, ensamblarVideo } = require('./agente_editor');
 
 // Produce una pieza completa. Devuelve { segundos, palabras } de la narración real.
-async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guiaVisual, tema, carpeta, destinoFinal, onProgreso }) {
+async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guiaVisual, tema, carpeta, destinoFinal, onProgreso, ganchoTexto }) {
     await fs.mkdir(carpeta, { recursive: true });
     const total = escenas.length;
     const avisar = (f, txt) => { if (onProgreso) onProgreso(f, `${etiqueta}: ${txt}`); };
@@ -18,7 +18,8 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guia
     avisar(0.02, 'narrando');
     const audios = await enParalelo(escenas.map(e => async () => {
         const audio = await audioDeEscena(e.narracion, nicho.voz);
-        e.duracion = (await duracionAudio(audio)) + CFG.pausaEscena;
+        // Se redondea hacia arriba a un número exacto de frames: clips, audio y subtítulos suman lo mismo
+        e.duracion = Math.ceil(((await duracionAudio(audio)) + CFG.pausaEscena) * CFG.fps) / CFG.fps;
         return audio;
     }), CFG.alltalk.concurrencia);
     const segundos = escenas.reduce((a, e) => a + e.duracion, 0);
@@ -39,7 +40,7 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guia
     // 3) Clips en paralelo
     let hechos = 0;
     const clips = await enParalelo(escenas.map((e, i) => async () => {
-        const clip = await renderizarEscena({ imagen: imagenes[i], audio: audios[i], duracion: e.duracion, indice: i, carpeta, formato });
+        const clip = await renderizarEscena({ imagen: imagenes[i], audio: audios[i], duracion: e.duracion, indice: i, total, carpeta, formato });
         hechos++;
         if (hechos % 10 === 0 || hechos === total) {
             console.log(`[Editor] 🎬 ${etiqueta}: clips ${hechos}/${total}`);
@@ -51,7 +52,7 @@ async function producirPieza({ etiqueta, escenas, formato, nicho, nichoKey, guia
     // 4) Ensamblado
     console.log(`[Editor] 🎞️ ${etiqueta}: ensamblando...`);
     avisar(0.95, 'ensamblando');
-    await ensamblarVideo({ clips, escenas, carpeta, nichoKey, destinoFinal, formato });
+    await ensamblarVideo({ clips, escenas, carpeta, nichoKey, destinoFinal, formato, ganchoTexto });
     await fs.rm(carpeta, { recursive: true, force: true });
     console.log(`[Sistema] ✅ ${etiqueta} listo: ${destinoFinal}`);
     return { segundos, palabras };

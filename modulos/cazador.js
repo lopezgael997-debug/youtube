@@ -1,17 +1,17 @@
 // modulos/cazador.js
 // El Cazador: patrulla YouTube buscando videos virales en inglés que le sirvan a
-// cada canal de la familia, los analiza con el modelo económico (Haiku) y manda
-// las ideas por Telegram.
+// CADA canal de la familia (los lee de canales.json), los analiza con el modelo
+// económico y manda las ideas por Telegram.
 //
 // Requiere en el .env: YOUTUBE_API_KEY (y lo que ya uses para Claude/Telegram).
 
 const fs = require('fs').promises;
 const path = require('path');
 const { google } = require('googleapis');
-const { CFG, DIR } = require('./config');
+const { CFG, DIR, CANALES } = require('./config');
 const { llamarClaude } = require('./claude');
 const { avisarTelegram } = require('./panel');
-const { obtenerTranscripcion } = require('./agente_capataz');
+const { obtenerTranscripcion } = require('./agente_cazador');
 
 // =====================================================================
 // 1. AJUSTES (aquí es donde tocas cosas)
@@ -29,12 +29,13 @@ const AJUSTES = {
     diasMemoria: 30              // cuánto tiempo recuerda un video ya revisado
 };
 
-// Un video pasa si tiene >= minVistas, O si es un "outlier": un canal chico
-// cuyo video tiene >= 3 veces sus suscriptores en vistas (y al menos minVistas/3).
-// Las claves coinciden con los id de canales.json.
-const NICHOS = {
-    gael_historias: {
-        nombre: 'Archivero del Tiempo (historia)',
+// Perfil de búsqueda por NICHO (los mismos nichos de config.js). Cada canal de canales.json
+// usa el de su nicho; si quieres afinar uno, agrega en ese canal de canales.json:
+//   "cazador": { "minVistas": 20000, "perfil": "...", "consultas": ["...", "..."] }
+// Un video pasa si tiene >= minVistas, O si es un "outlier": un canal chico cuyo video
+// tiene >= 3 veces sus suscriptores en vistas (y al menos minVistas/3).
+const PERFILES = {
+    historia: {
         minVistas: 30000,
         perfil: 'historia oculta, archivos y expedientes olvidados, secretos de la historia, hechos reales poco conocidos, tono de documental con misterio',
         consultas: [
@@ -44,8 +45,7 @@ const NICHOS = {
             'history mystery nobody talks about'
         ]
     },
-    papa_misterio: {
-        nombre: 'Misterio',
+    misterio: {
         minVistas: 40000,
         perfil: 'casos sin resolver, desapariciones, archivos desclasificados, fenómenos sin explicación, tono de expediente y suspenso',
         consultas: [
@@ -55,8 +55,7 @@ const NICHOS = {
             'strange case nobody can explain'
         ]
     },
-    mama_metafisica: {
-        nombre: 'Metafísica y Vidas Pasadas',
+    metafisica: {
         minVistas: 20000,
         perfil: 'vidas pasadas, reencarnación, el alma, experiencias cercanas a la muerte, despertar espiritual, tono sereno y místico',
         consultas: [
@@ -65,9 +64,62 @@ const NICHOS = {
             'near death experience story',
             'soul spiritual awakening messages'
         ]
+    },
+    iceberg: {
+        minVistas: 30000,
+        perfil: 'videos de "iceberg": casos, historias y datos reales del mundo ordenados desde lo más conocido hasta lo más oscuro y desconocido; sirven los icebergs explicados y las listas de casos extraños, poco conocidos y verificables',
+        consultas: [
+            'iceberg explained deep dive',
+            'iceberg of mysteries explained',
+            'dark history iceberg levels',
+            'strangest true stories nobody knows'
+        ]
+    },
+    ciencia: {
+        minVistas: 50000,
+        perfil: 'divulgación científica sorprendente: paradojas, descubrimientos y preguntas sin respuesta explicadas con claridad',
+        consultas: [
+            'science mystery explained',
+            'mind blowing science documentary',
+            'unsolved science questions',
+            'how does it actually work explained'
+        ]
+    },
+    finanzas: {
+        minVistas: 50000,
+        perfil: 'educación financiera práctica: ahorro, deudas, presupuesto, inversión básica y economía cotidiana, sin promesas de enriquecimiento rápido',
+        consultas: [
+            'personal finance explained',
+            'money mistakes to avoid',
+            'how debt really works',
+            'budgeting basics for beginners'
+        ]
     }
-    // Para sumar el iceberg, agrega aquí leo_iceberg con su nombre, perfil y consultas.
 };
+
+// Nombres que usabas antes -> id actual en canales.json
+const ALIAS = { gael_historias: 'gael_misterio' };
+
+function construirNichos() {
+    const mapa = {};
+    for (const canal of CANALES) {
+        const base = PERFILES[canal.nicho] || {};
+        const extra = canal.cazador || {};
+        const perfil = extra.perfil || base.perfil;
+        const consultas = extra.consultas || base.consultas;
+        if (!perfil || !Array.isArray(consultas) || !consultas.length) continue;
+        mapa[canal.id] = {
+            nombre: canal.nombre,
+            nicho: canal.nicho,
+            perfil,
+            consultas,
+            minVistas: Number(extra.minVistas || base.minVistas || 30000)
+        };
+    }
+    return mapa;
+}
+
+const NICHOS = construirNichos();
 
 // =====================================================================
 // 2. CLIENTE DE YOUTUBE (se crea al usarse, no al importar el módulo)
@@ -84,10 +136,11 @@ function yt() {
 }
 
 // =====================================================================
-// 3. MEMORIA: qué videos ya revisó (para no repetir alertas)
+// 3. MEMORIA: qué videos ya revisó cada canal (para no repetir alertas)
 // =====================================================================
 const rutaEstado = () => path.join(DIR.transcripciones, '_cazador_estado.json');
 const rutaIdeas = () => path.join(DIR.transcripciones, '_cazador_ideas.jsonl');
+const claveVisto = (idCanal, idVideo) => `${idCanal}|${idVideo}`;
 
 async function cargarEstado() {
     try {
@@ -174,6 +227,9 @@ function evaluarCandidatos(items, subs, nicho) {
         const cd = it.contentDetails || {};
 
         if (sn.liveBroadcastContent && sn.liveBroadcastContent !== 'none') continue;
+        // Solo videos en inglés (si YouTube informa el idioma)
+        const idioma = String(sn.defaultAudioLanguage || sn.defaultLanguage || '').toLowerCase();
+        if (idioma && !idioma.startsWith('en')) continue;
         const segundos = duracionASegundos(cd.duration);
         if (segundos < AJUSTES.duracionMinSeg) continue;
 
@@ -260,7 +316,6 @@ Responde SOLO este JSON, sin texto extra ni markdown:
 // =====================================================================
 // 6. TELEGRAM
 // =====================================================================
-// Sin asteriscos ni guiones bajos en el texto dinámico, para que no rompan el parseo de Markdown
 const limpiar = (t, max = 400) =>
     String(t || '').replace(/[*_`\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -268,7 +323,7 @@ function hace(horas) {
     return horas < 48 ? `${Math.round(horas)} h` : `${Math.round(horas / 24)} días`;
 }
 
-function armarMensaje(idCanal, nicho, video, a) {
+function armarMensaje(nicho, video, a) {
     const url = `https://www.youtube.com/watch?v=${video.id}`;
     const num = n => Math.round(n).toLocaleString('es-MX');
     const subs = video.suscriptores ? `${num(video.suscriptores)} suscriptores` : 'suscriptores ocultos';
@@ -292,28 +347,8 @@ function armarMensaje(idCanal, nicho, video, a) {
         `⏱ ${video.minutos} min · publicado hace ${hace(video.horasDesdePublicacion)}`,
         `🔗 ${url}`,
         ``,
-        `➡️ Si te sirve, pásale esta URL al capataz.`
+        `➡️ Si te sirve, pega esta URL en el panel y elige el canal "${nicho.nombre}".`
     ].join('\n');
-}
-
-async function enviarTelegram(texto) {
-    const intentar = async t => {
-        const r = await avisarTelegram(t);
-        if (r === false) throw new Error('avisarTelegram devolvió false');
-    };
-    try {
-        await intentar(texto);
-        return true;
-    } catch (e1) {
-        try {
-            // Reintento escapando caracteres especiales (por si avisarTelegram usa parse_mode Markdown)
-            await intentar(texto.replace(/([_*`\[])/g, '\\$1'));
-            return true;
-        } catch (e2) {
-            console.log(`[Cazador] ⚠️ Telegram falló: ${e2.message}`);
-            return false;
-        }
-    }
 }
 
 const pausa = ms => new Promise(r => setTimeout(r, ms));
@@ -321,7 +356,7 @@ const pausa = ms => new Promise(r => setTimeout(r, ms));
 // =====================================================================
 // 7. PATRULLAJE
 // =====================================================================
-async function patrullarCanal(idCanal, nicho, estado) {
+async function patrullarCanal(idCanal, nicho, estado, telegramListo) {
     console.log(`[Cazador] 🔍 ${nicho.nombre}: buscando...`);
 
     const ids = new Set();
@@ -333,7 +368,8 @@ async function patrullarCanal(idCanal, nicho, estado) {
         }
     }
 
-    const nuevos = [...ids].filter(id => !estado.vistos[id]);
+    // La memoria es POR CANAL: un mismo video puede servirle a dos canales distintos
+    const nuevos = [...ids].filter(id => !estado.vistos[claveVisto(idCanal, id)]);
     if (!nuevos.length) {
         console.log(`[Cazador] ${nicho.nombre}: nada nuevo.`);
         return 0;
@@ -351,13 +387,14 @@ async function patrullarCanal(idCanal, nicho, estado) {
     for (const video of candidatos) {
         if (enviadas >= AJUSTES.maxAlertasPorCanal) break;
         const url = `https://www.youtube.com/watch?v=${video.id}`;
+        const marca = claveVisto(idCanal, video.id);
 
         let transcripcion;
         try {
             transcripcion = await obtenerTranscripcion(url, video.id);
         } catch (e) {
             console.log(`[Cazador] ⚠️ Sin subtítulos: ${video.id} ("${video.tituloOriginal}")`);
-            estado.vistos[video.id] = new Date().toISOString();
+            estado.vistos[marca] = new Date().toISOString();
             continue;
         }
 
@@ -373,14 +410,19 @@ async function patrullarCanal(idCanal, nicho, estado) {
 
         if (analisis.puntaje < AJUSTES.puntajeMinimo) {
             console.log(`[Cazador] ➖ Descartado (${analisis.puntaje}/10): "${video.tituloOriginal}"`);
-            estado.vistos[video.id] = new Date().toISOString();
+            estado.vistos[marca] = new Date().toISOString();
             continue;
         }
 
-        const ok = await enviarTelegram(armarMensaje(idCanal, nicho, video, analisis));
-        if (!ok) continue; // sin marcar: se vuelve a intentar la próxima vez
+        const mensaje = armarMensaje(nicho, video, analisis);
+        if (telegramListo) {
+            const ok = await avisarTelegram(mensaje);
+            if (!ok) continue; // sin marcar: se vuelve a intentar la próxima vez
+        } else {
+            console.log(`\n${mensaje}\n`); // sin Telegram configurado, la idea se imprime aquí y queda en _cazador_ideas.jsonl
+        }
 
-        estado.vistos[video.id] = new Date().toISOString();
+        estado.vistos[marca] = new Date().toISOString();
         enviadas++;
         await registrarIdea({
             fecha: new Date().toISOString(),
@@ -392,17 +434,21 @@ async function patrullarCanal(idCanal, nicho, estado) {
             ...analisis
         });
         console.log(`[Cazador] 📲 Idea enviada (${analisis.puntaje}/10): ${analisis.titulo_espanol}`);
-        await pausa(AJUSTES.pausaTelegramMs);
+        if (telegramListo) await pausa(AJUSTES.pausaTelegramMs);
     }
 
     return enviadas;
 }
 
-// idsCanales: arreglo de ids de NICHOS; si no se pasa, patrulla todos
+// idsCanales: arreglo de ids de canales.json; si no se pasa, patrulla TODOS los canales de la familia
 async function patrullar(idsCanales) {
     await fs.mkdir(DIR.transcripciones, { recursive: true });
     const estado = await cargarEstado();
-    const lista = idsCanales && idsCanales.length ? idsCanales : Object.keys(NICHOS);
+    const lista = (idsCanales && idsCanales.length ? idsCanales : Object.keys(NICHOS)).map(id => ALIAS[id] || id);
+    const telegramListo = !!(CFG.telegram.token && CFG.telegram.chatId);
+    if (!telegramListo) {
+        console.log('[Cazador] ⚠️ Falta TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID: las ideas se imprimirán aquí y se guardarán en _cazador_ideas.jsonl.');
+    }
     let total = 0;
 
     for (const idCanal of lista) {
@@ -412,7 +458,7 @@ async function patrullar(idsCanales) {
             continue;
         }
         try {
-            total += await patrullarCanal(idCanal, nicho, estado);
+            total += await patrullarCanal(idCanal, nicho, estado, telegramListo);
         } catch (e) {
             console.error(`[Cazador] ❌ Error en ${idCanal}: ${e.message}`);
         }
@@ -423,4 +469,4 @@ async function patrullar(idsCanales) {
     return total;
 }
 
-module.exports = { patrullar, NICHOS, AJUSTES };
+module.exports = { patrullar, NICHOS, PERFILES, AJUSTES };

@@ -3,17 +3,24 @@ node_modules/
 
 # Archivos generados dinámicamente / temporales
 cache/
+trabajo/
+salida/
+miniaturas_prueba/
+data/
 *.json.bak
 
 # Variables de entorno y secretos
 .env
 .env.*
 
-# Archivos de audio y multimedia
+# Archivos de audio, video y multimedia
 *.wav
 *.mp3
 *.ogg
 *.flac
+*.mp4
+*.mov
+*.mkv
 *.png
 *.jpg
 *.jpeg

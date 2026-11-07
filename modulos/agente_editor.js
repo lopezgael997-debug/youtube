@@ -7,11 +7,17 @@ const { existe, hash } = require('./utilidades');
 // =====================================================================
 // AGENTE EDITOR: clips, subtítulos, música y render final
 // =====================================================================
-const VERSION_EFECTOS = 'v3';   // súbela cuando cambies los efectos: así no se reusan clips viejos de una corrida interrumpida
+const VERSION_EFECTOS = 'v4';   // súbela cuando cambies los efectos: así no se reusan clips viejos de una corrida interrumpida
 const SOBREMUESTREO = 1.4;      // si ves "temblor" en los zooms lentos, súbelo a 2 (cuesta más CPU)
 const ZOOM_MIN = 1.08;          // el zoom out nunca baja de aquí: los bordes de la imagen (donde la IA suele deformar) quedan fuera de cuadro
-const ESCENAS_APERTURA = 6;     // primeras escenas del video largo con 2 planos (corte cada ~3 s): ahí se pierde más audiencia
+const ESCENAS_APERTURA = 6;     // primeras escenas del video largo: ritmo más rápido (ahí se pierde más audiencia)
 const FADE = 0.12;              // casi un corte seco; pon 0 para cortes totalmente secos
+
+// Duración objetivo de cada plano (un plano = un encuadre/movimiento de cámara distinto)
+const PLANO_CUERPO_SEG = 5.5;   // video largo: un corte cada 4-7 s
+const PLANO_APERTURA_SEG = 3.0; // primeros ~60 s del video largo
+const PLANO_SHORT_SEG = 3.2;    // Shorts
+const MAX_PLANOS = 4;
 
 // Movimientos de cámara. p = avance suave 0→1 (arranca y frena sin tirón)
 const avance = (N) => `(3*pow(on/${N},2)-2*pow(on/${N},3))`;
@@ -27,12 +33,12 @@ const MOVIMIENTOS = {
 const LISTA_HORIZONTAL = ['acercar', 'derIzq', 'alejar', 'izqDer'];
 const LISTA_VERTICAL = ['acercar', 'subir', 'alejar', 'izqDer', 'derIzq'];
 
-// Cuántos planos (cortes) lleva una escena. Un plano = un encuadre/movimiento distinto de la MISMA imagen,
-// así el ritmo sube sin generar más imágenes en ComfyUI.
+// Cuántos planos (cortes) lleva una escena, según su duración. Los planos de una misma escena
+// reencuadran la MISMA imagen, así el ritmo sube sin generar más imágenes en ComfyUI.
 function planosPorEscena(indice, duracion, formato) {
-    if (duracion < 3.6) return 1;
     const esShort = formato.alto > formato.ancho;
-    return (esShort || indice < ESCENAS_APERTURA) ? 2 : 1;
+    const objetivo = esShort ? PLANO_SHORT_SEG : (indice < ESCENAS_APERTURA ? PLANO_APERTURA_SEG : PLANO_CUERPO_SEG);
+    return Math.min(MAX_PLANOS, Math.max(1, Math.round(duracion / objetivo)));
 }
 
 async function renderizarEscena({ imagen, audio, duracion, indice, total, carpeta, formato }) {
@@ -112,6 +118,7 @@ PlayResY: ${formato.alto}
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Arial,${formato.fuente},${formato.colorSub},&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,${formato.outline},1,2,${formato.margenH},${formato.margenH},${formato.margenV},1
 Style: Gancho,Arial,${Math.round(formato.fuente * 1.5)},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,${formato.outline + 3},2,8,${formato.margenH},${formato.margenH},${Math.round(formato.alto * 0.18)},1
+Style: Suscribete,Arial,${Math.round(formato.fuente * 0.62)},&H00FFFFFF,&H000000FF,&H000000E0,&H80000000,-1,0,0,0,100,100,3,0,3,14,0,9,60,60,60,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -127,9 +134,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     // Palabra activa resaltada (estilo Shorts): el trozo se mantiene en pantalla y cambia de color la palabra que se está diciendo.
     // Verticales: base amarilla → resalta en blanco. Horizontal: base blanca → resalta en dorado. (Colores en formato &HBBGGRR&)
-    const RESALTE = formato.alto > formato.ancho ? '&HFFFFFF&' : '&H00D7FF&';
+    const esHorizontal = formato.ancho > formato.alto;
+    const RESALTE = esHorizontal ? '&H00D7FF&' : '&HFFFFFF&';
     // Peso de cada palabra: sus letras + una pausa extra si termina en puntuación (la voz se detiene ahí)
     const peso = (p) => p.length + (/[.,;:!?…]$/.test(p) ? 4 : 0);
+    let ctaMostrado = false;
 
     for (const esc of escenas) {
         const palabras = esc.narracion.replace(/\s+/g, ' ').trim().split(' ')
@@ -141,6 +150,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const totalPeso = palabras.reduce((a, p) => a + peso(p), 0) || 1;
         const tiempoVoz = esc.duracion - CFG.pausaEscena;
         let t = inicioEscena;
+
+        // Botón "SUSCRÍBETE" (solo video largo, una vez): aparece justo cuando la voz pronuncia la invitación
+        if (esHorizontal && !ctaMostrado) {
+            const k = palabras.findIndex(p => /suscr[ií]b/i.test(p));
+            if (k !== -1) {
+                ctaMostrado = true;
+                const previo = palabras.slice(0, k).reduce((a, p) => a + peso(p), 0);
+                const ini = inicioEscena + Math.max(0, tiempoVoz * (previo / totalPeso) - 0.3);
+                lineas.push(`Dialogue: 2,${formatoTiempoAss(ini)},${formatoTiempoAss(ini + 4.5)},Suscribete,,0,0,0,,{\\fad(250,350)\\t(0,300,\\fscx112\\fscy112)\\t(300,600,\\fscx100\\fscy100)}SUSCRÍBETE`);
+            }
+        }
 
         for (const trozo of trozos) {
             for (let k = 0; k < trozo.length; k++) {
@@ -241,4 +261,4 @@ async function ensamblarVideo({ clips, escenas, carpeta, nichoKey, destinoFinal,
     await fs.copyFile(path.join(carpeta, 'final.mp4'), destinoFinal);
 }
 
-module.exports = { renderizarEscena, formatoTiempoAss, generarSubtitulosAss, elegirMusica, cadenaAudio, ensamblarVideo };
+module.exports = { renderizarEscena, planosPorEscena, formatoTiempoAss, generarSubtitulosAss, elegirMusica, cadenaAudio, ensamblarVideo };

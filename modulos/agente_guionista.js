@@ -13,6 +13,20 @@ function validarEscenas(escenas) {
     }
 }
 
+// Reglas de retención por capítulo (gancho al inicio, llamado a suscribirse a mitad del video)
+function reglasRetencion(i, total, capCTA) {
+    const apertura = i === 0
+        ? `La PRIMERA escena es el gancho: máximo 14 palabras, sin saludo ni presentación del canal ni del tema, que plante de golpe la pregunta, la imagen o el dato más impactante de toda la historia. Antes de terminar el primer minuto abre un bucle de curiosidad (una promesa concreta de lo que se revelará más adelante) que solo se cierre al final del video. Las escenas del primer minuto pueden ser más cortas (12 a 18 palabras) para que el ritmo sea rápido.`
+        : 'Continúa con naturalidad, sin saludar ni repetir la introducción.';
+    const cta = i === capCTA
+        ? `Incluye UNA sola vez, justo después de un dato clave o un giro de este capítulo, una invitación breve a suscribirse (máximo 20 palabras, en esa misma escena o en la siguiente) que apunte a lo que viene después, con el tono de este canal y usando la palabra "suscríbete" o "suscribirte". Evita el cliché "no olvides dar like y suscribirte"; mejor hazla parte del suspenso (por ejemplo, prometiendo el dato que aún no has revelado).`
+        : 'En este capítulo NO pidas suscribirse ni dar like.';
+    const cierre = i === total - 1
+        ? 'Este es el último capítulo: cierra de forma memorable.'
+        : 'No cierres la historia: deja la tensión abierta para el siguiente capítulo.';
+    return { apertura, cta, cierre };
+}
+
 async function obtenerGuion(proyecto, canal, nicho, idVideo, minutos) {
     const clave = `${idVideo}_${canal.id}_${minutos}m`;
     const numCaps = Math.max(1, Math.round(minutos / CFG.minutosPorCapitulo));
@@ -48,7 +62,7 @@ async function obtenerGuion(proyecto, canal, nicho, idVideo, minutos) {
             return llamarClaude({
                 modelo: CFG.modeloEconomico, nicho, contexto: await getContexto(), maxTokens: 4000, esfuerzo: CFG.efforts.plan,
                 instruccion: `Planifica un video de ${minutos} minutos basado en el material de referencia, dividido en EXACTAMENTE ${numCaps} capítulos.
-El primer capítulo debe abrir con un gancho espectacular y el último cerrar de forma memorable.
+El primer capítulo debe abrir con un gancho espectacular (la gente decide en los primeros 15 segundos si se queda) y el último cerrar de forma memorable.
 Sé breve: cada "resumen" de capítulo tiene máximo 30 palabras.
 ${bloquePrevios}${bloqueEstructura}
 Incluye una "guia_visual": en INGLÉS, máximo 15 palabras, que fije SOLO el aspecto general de todo el video: época, paleta de colores, tipo de luz y textura. NO incluyas objetos, lugares, vehículos ni personajes concretos (nada de barcos, mar, edificios, etc.), porque esta guía se añade a TODAS las imágenes.
@@ -83,8 +97,11 @@ Responde con este JSON:
     // --- 2) Capítulos (se amplían si quedan cortos) ---
     const escenas = [];
     const total = plan.capitulos.length;
+    // El llamado a suscribirse va en el capítulo central (si hay uno solo, en ese; si hay dos, al final del primero)
+    const capCTA = total === 1 ? 0 : Math.ceil(total / 2) - 1;
     for (let i = 0; i < total; i++) {
         const capPlan = plan.capitulos[i];
+        const reglas = reglasRetencion(i, total, capCTA);
         // El nombre incluye una huella del plan: si el plan cambia, los capítulos viejos no se reutilizan por error
         const base = path.join(DIR.guiones, `${clave}_cap${String(i + 1).padStart(2, '0')}_${hash(capPlan.titulo + '|' + (capPlan.resumen || '')).slice(0, 8)}`);
 
@@ -100,8 +117,9 @@ ${JSON.stringify(plan.capitulos, null, 1)}
 ${bloqueGuia}${bloqueEstructura}
 Escribe AHORA solo el capítulo ${i + 1} de ${total}: "${capPlan.titulo}".
 - Longitud: entre ${palabrasCap} y ${Math.round(palabrasCap * 1.2)} palabras de narración en total. No te quedes corto.
-- ${i === 0 ? 'Empieza con un gancho espectacular en los primeros 15 segundos.' : 'Continúa con naturalidad, sin saludar ni repetir la introducción. Viene después de: "' + previo + '"'}
-- ${i === total - 1 ? 'Este es el último capítulo: cierra de forma memorable.' : 'No cierres la historia: deja la tensión abierta para el siguiente capítulo.'}
+- ${reglas.apertura}${i > 0 ? ' Viene después de: "' + previo + '"' : ''}
+- ${reglas.cierre}
+- ${reglas.cta}
 - Divide en escenas de 1 o 2 oraciones (${CFG.escenaMin} a ${CFG.escenaMax} palabras cada una). Cada escena tendrá UNA imagen, así que cada escena debe tratar de una sola cosa visual.
 
 JSON:
@@ -125,6 +143,8 @@ ${JSON.stringify(cap.escenas)}
 
 Quedó corta: tiene ${palabrasCapReal} palabras y el objetivo es de ${palabrasCap} a ${Math.round(palabrasCap * 1.2)}.
 Reescribe el capítulo COMPLETO ampliándolo: añade detalles concretos del material, contexto, descripciones de lugares y momentos, y tensión narrativa. No repitas ideas ni rellenes con frases vacías. Conserva el mismo inicio y ${i === total - 1 ? 'un cierre memorable' : 'la tensión abierta al final'}.
+${i === 0 ? 'Conserva la primera escena (el gancho de máximo 14 palabras) tal como está.' : ''}
+${i === capCTA ? 'Conserva la invitación breve a suscribirse (una sola vez, con la palabra "suscríbete" o "suscribirte").' : 'No añadas invitaciones a suscribirse ni a dar like.'}
 Escenas de 1 o 2 oraciones (${CFG.escenaMin} a ${CFG.escenaMax} palabras), cada una con una sola idea visual.
 
 JSON:
@@ -147,7 +167,7 @@ JSON:
 
     return {
         titulo_youtube: plan.titulo_youtube, descripcion: plan.descripcion, etiquetas: plan.etiquetas,
-        guia_visual: guiaVisual, escenas, clave,
+        guia_visual: guiaVisual, escenas, clave, capitulos: total,
         miniatura: (plan.miniatura && typeof plan.miniatura === 'object')
             ? { gancho: String(plan.miniatura.gancho || '').trim(), escena: String(plan.miniatura.escena || '').trim() }
             : null
@@ -173,11 +193,14 @@ ${bloqueGuia}
 Crea ${cantidad} guiones de YouTube Shorts (vertical), cada uno sobre un momento o dato DISTINTO y atractivo del video.
 Reglas:
 - Cada short dura unos 45 a 55 segundos (≈ 120 a 135 palabras en total).
-- Debe funcionar solo, sin haber visto el video: abre con un gancho fuerte en la primera frase y termina con una pregunta o invitación a ver el video completo.
+- Debe funcionar solo, sin haber visto el video.
+- La PRIMERA escena (máximo 10 palabras) tiene que frenar el dedo de quien desliza: plantea de golpe la pregunta, la imagen o el dato más impactante, sin saludar ni presentarte.
+- Termina con una pregunta o una invitación a ver el video completo.
+- "texto_gancho": de 3 a 6 palabras en español, en MAYÚSCULAS, que se mostrará en pantalla en letra gigante durante los primeros 2 segundos. Que intrigue; no repitas literalmente la primera frase.
 - Divide en 7 a 9 escenas de 14 a 20 palabras.
 
 JSON:
-{ "shorts": [ { "titulo": "título corto con gancho", "descripcion": "1 línea", "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description of exactly this scene" } ] } ] }`
+{ "shorts": [ { "titulo": "título corto con gancho", "texto_gancho": "TRES A SEIS PALABRAS", "descripcion": "1 línea", "escenas": [ { "narracion": "texto", "prompt_imagen": "english visual description of exactly this scene" } ] } ] }`
             });
         },
         (d) => {

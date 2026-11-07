@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const { CFG } = require('./config');
 const { dormir } = require('./utilidades');
@@ -40,35 +41,45 @@ function crearReportero(proyecto) {
     };
 }
 
+// Devuelve true solo si Telegram confirmó el envío (false si falta configuración o falló)
 async function avisarTelegram(texto) {
     const { token, chatId } = CFG.telegram;
-    if (!token || !chatId) return;
+    if (!token || !chatId) return false;
     try {
         const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, text: texto })
+            body: JSON.stringify({ chat_id: chatId, text: String(texto).slice(0, 4000) })
         });
-        if (!r.ok) console.log(`[Sistema] ⚠️ Telegram respondió HTTP ${r.status}. Revisa el token y el chat id.`);
+        if (!r.ok) {
+            console.log(`[Sistema] ⚠️ Telegram respondió HTTP ${r.status}. Revisa el token y el chat id.`);
+            return false;
+        }
+        return true;
     } catch (e) {
         console.log(`[Sistema] ⚠️ No se pudo avisar por Telegram: ${e.message}`);
+        return false;
     }
 }
-
 
 // Envía una imagen (por ejemplo la comparativa de miniaturas) a Telegram
 async function enviarFotoTelegram(rutaImagen, texto) {
     const { token, chatId } = CFG.telegram;
-    if (!token || !chatId) return;
+    if (!token || !chatId) return false;
     try {
         const form = new FormData();
         form.append('chat_id', chatId);
         if (texto) form.append('caption', texto.slice(0, 1000));
-        form.append('photo', new Blob([require('fs').readFileSync(rutaImagen)], { type: 'image/jpeg' }), path.basename(rutaImagen));
+        form.append('photo', new Blob([fs.readFileSync(rutaImagen)], { type: 'image/jpeg' }), path.basename(rutaImagen));
         const r = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
-        if (!r.ok) console.log(`[Sistema] ⚠️ Telegram respondió HTTP ${r.status} al enviar la imagen.`);
+        if (!r.ok) {
+            console.log(`[Sistema] ⚠️ Telegram respondió HTTP ${r.status} al enviar la imagen.`);
+            return false;
+        }
+        return true;
     } catch (e) {
         console.log(`[Sistema] ⚠️ No se pudo enviar la imagen por Telegram: ${e.message}`);
+        return false;
     }
 }
 

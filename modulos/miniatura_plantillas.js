@@ -1,88 +1,68 @@
 // =====================================================================
 // MINIATURAS · PLANTILLAS VISUALES
-// Aquí viven los 8 diseños (HTML/CSS), los colores, las fuentes y el ajuste
-// automático del texto. No hace nada por sí solo: lo usa agente_miniaturista.js
+// 14 composiciones (HTML/CSS) + el armado de la página con las capas del ADN
+// (efecto de texto, tratamiento de fondo, acentos, tipografía...). El ajuste automático
+// del texto también vive aquí. No hace nada por sí solo: lo usa agente_miniaturista.js
 // =====================================================================
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { DIR } = require('./config');
-
-const CONFIG = {
-    carpetaFuentes: DIR.fuentes,
-    fuenteTitulo: "'Anton','Bebas Neue','Oswald',Impact,'Arial Narrow','Liberation Sans Narrow',sans-serif",
-    fuenteElegante: "'Cinzel','Playfair Display','Cormorant Garamond',Georgia,'Times New Roman',serif"
-};
-
-const ANCHO = 1280, ALTO = 720;
+const {
+    CONFIG, ANCHO, ALTO, FUENTES, esc, numeroDeTexto, rgba, textoSobre, oscuro, contorno, sombraTexto
+} = require('./miniatura_util');
+const { construirCapas } = require('./miniatura_capas');
 
 // ---------------------------------------------------------------------
-// 2) UTILIDADES
+// TEXTO
 // ---------------------------------------------------------------------
-const esc = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-const numeroDeTexto = (t) => parseInt(crypto.createHash('md5').update(String(t)).digest('hex').slice(0, 8), 16);
-
-function hexARgb(hex) {
-    let h = String(hex || '#000000').replace('#', '');
-    if (h.length === 3) h = h.split('').map(x => x + x).join('');
-    const n = parseInt(h, 16);
-    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
-const rgba = (hex, a) => { const { r, g, b } = hexARgb(hex); return `rgba(${r},${g},${b},${a})`; };
-
-function luminancia(hex) {
-    const { r, g, b } = hexARgb(hex);
-    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-}
-
-const textoSobre = (hex) => (luminancia(hex) > 0.55 ? '#111111' : '#FFFFFF');
-
-const oscuro = (hex) => (luminancia(hex) > 0.35 ? '#0b0b0f' : hex);
-
-// Contorno grueso alrededor de las letras (funciona en cualquier versión de Chrome)
-function contorno(color, px) {
-    const sombras = [];
-    for (let i = 0; i < 16; i++) {
-        const a = (i / 16) * 2 * Math.PI;
-        sombras.push(`${(Math.cos(a) * px).toFixed(1)}px ${(Math.sin(a) * px).toFixed(1)}px 0 ${color}`);
-    }
-    return sombras.join(', ');
-}
-
-const sombraTexto = (c, px = 7, extra = '') =>
-    `${contorno(c.trazo, px)}, 0 10px 24px rgba(0,0,0,.7)${extra ? ', ' + extra : ''}`;
-
-// Texto en MAYÚSCULAS con la(s) última(s) palabra(s) resaltada(s)
-function textoConResalte(gancho, resaltar = 1) {
+// Palabras en MAYÚSCULAS con la(s) última(s) marcadas como resalte: [{ t, hl }]
+function palabrasResalte(gancho, resaltar = 1) {
     const palabras = String(gancho || '').trim().toLocaleUpperCase('es').split(/\s+/).filter(Boolean);
-    if (!palabras.length) return '';
+    if (!palabras.length) return [];
     const n = palabras.length === 1 ? 1 : Math.min(resaltar, palabras.length - 1);
-    const normales = palabras.slice(0, palabras.length - n).map(esc).join(' ');
-    const resaltadas = palabras.slice(palabras.length - n).map(esc).join(' ');
+    return palabras.map((p, i) => ({ t: esc(p), hl: i >= palabras.length - n }));
+}
+
+// Texto en MAYÚSCULAS con la(s) última(s) palabra(s) resaltada(s) (HTML)
+function textoConResalte(gancho, resaltar = 1) {
+    const pal = palabrasResalte(gancho, resaltar);
+    if (!pal.length) return '';
+    const normales = pal.filter(p => !p.hl).map(p => p.t).join(' ');
+    const resaltadas = pal.filter(p => p.hl).map(p => p.t).join(' ');
     return normales ? `${normales} <span class="hl">${resaltadas}</span>` : `<span class="hl">${resaltadas}</span>`;
 }
 
 // ---------------------------------------------------------------------
-// 3) FUENTES Y FONDO (todo embebido: sin depender de internet ni de rutas)
+// FUENTES Y FONDO (todo embebido: sin depender de internet ni de rutas)
 // ---------------------------------------------------------------------
 let cacheFuentes = null;
 
 function cssFuentesLocales() {
     if (cacheFuentes !== null) return cacheFuentes;
     cacheFuentes = '';
-    if (!fs.existsSync(CONFIG.carpetaFuentes)) return cacheFuentes;
+    if (!fs.existsSync(DIR.fuentes)) return cacheFuentes;
     const formatos = { '.ttf': 'truetype', '.otf': 'opentype', '.woff': 'woff', '.woff2': 'woff2' };
     const mimes = { '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2' };
-    for (const archivo of fs.readdirSync(CONFIG.carpetaFuentes)) {
+    const pesoDe = (n) => /variable|\[/i.test(n) ? 9 : /black/i.test(n) ? 8 : /extrabold/i.test(n) ? 7 : /semibold/i.test(n) ? 5 : /bold/i.test(n) ? 6 : /medium/i.test(n) ? 4 : /light|thin/i.test(n) ? 1 : 3;
+    // Una familia puede venir en varios archivos (Regular, Bold...): se usa el más pesado
+    const porFamilia = {};
+    for (const archivo of fs.readdirSync(DIR.fuentes)) {
         const ext = path.extname(archivo).toLowerCase();
         if (!formatos[ext]) continue;
-        const familia = path.basename(archivo, ext).replace(/[-_ ](Regular|Bold|Medium|Black|Light|SemiBold|ExtraBold|Italic)$/i, '');
+        const base = path.basename(archivo, ext);
+        const familia = base.split(/[-\[_ ]/)[0];
+        if (!familia) continue;
+        if (!porFamilia[familia] || pesoDe(base) > pesoDe(porFamilia[familia].base)) porFamilia[familia] = { archivo, ext, base };
+    }
+    for (const [familia, f] of Object.entries(porFamilia)) {
         const nombres = new Set([familia, familia.replace(/([a-z])([A-Z])/g, '$1 $2')]);
-        const b64 = fs.readFileSync(path.join(CONFIG.carpetaFuentes, archivo)).toString('base64');
+        const norm = f.base.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (const def of Object.values(FUENTES)) {
+            if (def.patron.test(norm)) nombres.add(def.nombre);
+        }
+        const b64 = fs.readFileSync(path.join(DIR.fuentes, f.archivo)).toString('base64');
         for (const nombre of nombres) {
-            cacheFuentes += `@font-face{font-family:'${nombre}';src:url(data:${mimes[ext]};base64,${b64}) format('${formatos[ext]}');font-weight:100 900;}\n`;
+            cacheFuentes += `@font-face{font-family:'${nombre}';src:url(data:${mimes[f.ext]};base64,${b64}) format('${formatos[f.ext]}');font-weight:100 900;}\n`;
         }
     }
     return cacheFuentes;
@@ -98,8 +78,8 @@ function fondoComoDataURI(fondo) {
 }
 
 // ---------------------------------------------------------------------
-// 4) PLANTILLAS (cada una devuelve { css, html, filtroFondo? })
-//    d = { t (título con resalte), sub, etiqueta, nivel, total, c (paleta), semilla }
+// PLANTILLAS (cada una devuelve { css, html, filtroFondo? })
+//    d = { t (título con resalte), g (gancho en texto), sub, etiqueta, nivel, total, c (paleta), semilla, foco }
 // ---------------------------------------------------------------------
 const PLANTILLAS = {
 
@@ -254,15 +234,144 @@ const PLANTILLAS = {
             <h1 class="z titulo" data-fit="150,52" data-v="centro"><span class="t">${d.t}</span></h1>
             ${d.sub ? `<div class="z sub">${esc(d.sub)}</div>` : ''}`
         };
-    }
+    },
+
+    // ----------------------------- NUEVAS -----------------------------
+
+    // Cada palabra en su propia línea, a distinto tamaño, como un cartel de película
+    apilado: (d) => {
+        const pal = palabrasResalte(d.g, 1);
+        const lineas = [];
+        if (pal.length <= 4) pal.forEach(p => lineas.push({ t: p.t, hl: p.hl }));
+        else for (let i = 0; i < pal.length; i += 2) {
+            const par = pal.slice(i, i + 2);
+            lineas.push({ t: par.map(x => x.t).join(' '), hl: par.some(x => x.hl) });
+        }
+        return {
+            css: `
+            .sombra{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.86) 0%,rgba(0,0,0,.55) 44%,rgba(0,0,0,0) 72%)}
+            .titulo{left:54px;top:110px;width:640px;height:500px;display:flex;flex-direction:column;justify-content:center;text-shadow:${sombraTexto(d.c, 6)}}
+            .lin{display:block;white-space:nowrap;text-transform:uppercase;overflow:visible}
+            .lin span{display:inline-block}
+            .lin.h{color:${d.c.resalte}}
+            .badge{left:54px;top:40px;transform:rotate(-2deg)}
+            .sub{left:54px;top:636px;width:640px}`,
+            html: `
+            <div class="sombra"></div>
+            ${d.etiqueta ? `<div class="z badge">${esc(d.etiqueta)}</div>` : ''}
+            <div class="z titulo" data-stack="270">${lineas.map(l => `<div class="lin${l.hl ? ' h' : ''}"><span>${l.t}</span></div>`).join('')}</div>
+            ${d.sub ? `<div class="z sub">${esc(d.sub)}</div>` : ''}`
+        };
+    },
+
+    // Marco de cartel con doble borde y rombos en las esquinas
+    marco: (d) => ({
+        css: `
+        .sombra{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.25) 0%,rgba(0,0,0,.78) 100%)}
+        .m1{left:24px;top:24px;right:24px;bottom:24px;border:7px solid ${d.c.resalte};box-shadow:0 0 30px ${rgba(d.c.resalte, .5)}}
+        .m2{left:46px;top:46px;right:46px;bottom:46px;border:2px solid ${rgba('#ffffff', .75)}}
+        .rb{width:26px;height:26px;background:${d.c.resalte};transform:rotate(45deg);border:3px solid #000}
+        .tag{left:50%;top:4px;transform:translateX(-50%);background:#000;color:${d.c.resalte};border:3px solid ${d.c.resalte};padding:5px 34px;font-size:34px;letter-spacing:9px;white-space:nowrap}
+        .titulo{left:110px;top:170px;width:1060px;height:340px;text-align:center;text-shadow:${sombraTexto(d.c, 6)}}
+        .sub{left:0;right:0;top:556px;text-align:center}`,
+        html: `
+        <div class="sombra"></div><div class="z m1"></div><div class="z m2"></div>
+        <div class="z rb" style="left:11px;top:11px"></div><div class="z rb" style="left:1243px;top:11px"></div>
+        <div class="z rb" style="left:11px;top:683px"></div><div class="z rb" style="left:1243px;top:683px"></div>
+        ${d.etiqueta ? `<div class="z tag">${esc(d.etiqueta)}</div>` : ''}
+        <h1 class="z titulo" data-fit="170,56" data-v="centro"><span class="t">${d.t}</span></h1>
+        ${d.sub ? `<div class="z sub">${esc(d.sub)}</div>` : ''}`
+    }),
+
+    // Cada palabra en una "pegatina" ligeramente inclinada
+    bloques: (d) => {
+        const pal = palabrasResalte(d.g, 1);
+        const cajas = pal.map((p, i) => `<span class="bk${p.hl ? ' h' : ''}" style="transform:rotate(${(((i * 37) % 5) - 2) * 0.9}deg)">${p.t}</span>`).join(' ');
+        return {
+            css: `
+            .sombra{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.6) 0%,rgba(0,0,0,.3) 50%,rgba(0,0,0,0) 78%)}
+            .titulo{left:60px;top:150px;width:780px;height:420px;text-shadow:none}
+            .titulo .t{line-height:1.3}
+            .bk{display:inline-block;background:#0b0b0f;color:${d.c.color};padding:.02em .24em;margin:6px 8px 6px 0;border:4px solid ${d.c.resalte};box-shadow:8px 8px 0 rgba(0,0,0,.55)}
+            .bk.h{background:${d.c.resalte};color:${textoSobre(d.c.resalte)};border-color:#fff}
+            .badge{left:60px;top:46px;transform:rotate(-2deg)}
+            .sub{left:60px;top:600px;width:780px}`,
+            html: `
+            <div class="sombra"></div>
+            ${d.etiqueta ? `<div class="z badge">${esc(d.etiqueta)}</div>` : ''}
+            <h1 class="z titulo" data-fit="170,56" data-v="centro"><span class="t">${cajas}</span></h1>
+            ${d.sub ? `<div class="z sub">${esc(d.sub)}</div>` : ''}`
+        };
+    },
+
+    // Si el gancho trae un número ("21 DÍAS..."), el número es el protagonista (marca de agua gigante)
+    numero: (d) => {
+        const m = String(d.g || '').match(/\d{1,4}/);
+        const num = m ? m[0] : '?';
+        const resto = m ? String(d.g).replace(num, '').replace(/\s+/g, ' ').trim() : '';
+        const tam = num.length <= 1 ? 720 : num.length === 2 ? 600 : num.length === 3 ? 440 : 340;
+        const titulo = resto ? textoConResalte(resto, 1) : d.t;
+        return {
+            css: `
+            .sombra{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.82) 0%,rgba(0,0,0,.5) 48%,rgba(0,0,0,.05) 82%)}
+            .num{left:10px;top:-70px;font-size:${tam}px;line-height:1;white-space:nowrap;color:${rgba(d.c.resalte, .22)};-webkit-text-stroke:8px ${rgba(d.c.resalte, .95)};text-shadow:0 0 60px ${rgba(d.c.resalte, .55)}}
+            .titulo{left:54px;top:330px;width:740px;height:290px;text-shadow:${sombraTexto(d.c, 6)}}
+            .badge{left:54px;top:46px;transform:rotate(-2deg)}
+            .sub{left:54px;top:644px;width:740px}`,
+            html: `
+            <div class="sombra"></div>
+            <div class="z num">${esc(num)}</div>
+            ${d.etiqueta ? `<div class="z badge">${esc(d.etiqueta)}</div>` : ''}
+            <h1 class="z titulo" data-fit="170,56" data-v="abajo"><span class="t">${titulo}</span></h1>
+            ${d.sub ? `<div class="z sub">${esc(d.sub)}</div>` : ''}`
+        };
+    },
+
+    // Foco: se oscurece todo menos un círculo que rodea al sujeto (usa el punto focal detectado en la imagen)
+    circulo: (d) => {
+        const R = 270;
+        const fx = Math.min(1000, Math.max(840, (d.foco && d.foco.x) || 960));
+        const fy = Math.min(460, Math.max(260, (d.foco && d.foco.y) || 360));
+        return {
+            css: `
+            .foco{position:absolute;inset:0;background:radial-gradient(circle at ${fx}px ${fy}px,rgba(0,0,0,0) ${R}px,rgba(0,0,0,.82) ${R + 95}px)}
+            .sombraI{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.7) 0%,rgba(0,0,0,0) 55%)}
+            .aro{left:${fx - R}px;top:${fy - R}px;width:${R * 2}px;height:${R * 2}px;border-radius:50%;border:12px solid ${d.c.resalte};box-shadow:0 0 50px ${rgba(d.c.resalte, .85)},inset 0 0 40px rgba(0,0,0,.35)}
+            .titulo{left:52px;top:150px;width:${fx - R - 90}px;height:420px;text-shadow:${sombraTexto(d.c, 6)}}
+            .badge{left:52px;top:46px;transform:rotate(-2deg)}
+            .sub{left:52px;top:600px;width:${fx - R - 90}px}`,
+            html: `
+            <div class="foco"></div><div class="sombraI"></div><div class="z aro"></div>
+            ${d.etiqueta ? `<div class="z badge">${esc(d.etiqueta)}</div>` : ''}
+            <h1 class="z titulo" data-fit="170,56" data-v="centro"><span class="t">${d.t}</span></h1>
+            ${d.sub ? `<div class="z sub">${esc(d.sub)}</div>` : ''}`
+        };
+    },
+
+    // Título arriba, ancho completo; el sujeto queda debajo
+    cabecera: (d) => ({
+        css: `
+        .sombra{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.88) 0%,rgba(0,0,0,.5) 36%,rgba(0,0,0,0) 62%,rgba(0,0,0,.55) 100%)}
+        .titulo{left:50px;top:28px;width:1180px;height:270px;text-align:center;text-shadow:${sombraTexto(d.c, 6)}}
+        .badge{left:50%;bottom:40px;transform:translateX(-50%)}
+        .sub{left:0;right:0;bottom:112px;text-align:center}`,
+        html: `
+        <div class="sombra"></div>
+        <h1 class="z titulo" data-fit="180,58" data-v="centro"><span class="t">${d.t}</span></h1>
+        ${d.sub ? `<div class="z sub">${esc(d.sub)}</div>` : ''}
+        ${d.etiqueta ? `<div class="z badge">${esc(d.etiqueta)}</div>` : ''}`
+    })
 };
 
 // ---------------------------------------------------------------------
-// 5) PÁGINA BASE + AJUSTE AUTOMÁTICO DEL TEXTO
+// PÁGINA BASE + AJUSTE AUTOMÁTICO DEL TEXTO
+// d.c es la paleta; adn (opcional) trae las capas elegidas por miniatura_adn.js
 // ---------------------------------------------------------------------
-function armarHTML({ fondoURI, plantilla, d }) {
+function armarHTML({ fondoURI, plantilla, d, adn }) {
     const { css, html, filtroFondo } = PLANTILLAS[plantilla](d);
     const c = d.c;
+    const capas = adn ? construirCapas(adn, c, plantilla, d.foco) : null;
+    const origen = adn && adn.voltear ? 'center center' : '70% 45%';
     const fondoCSS = fondoURI
         ? `background-image:url("${fondoURI}")`
         : `background-image:radial-gradient(circle at 70% 40%,${rgba(c.resalte, .55)},${oscuro(c.trazo)} 70%,#000)`;
@@ -273,7 +382,7 @@ ${cssFuentesLocales()}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:${ANCHO}px;height:${ALTO}px;overflow:hidden;background:#000}
 .lienzo{position:relative;width:${ANCHO}px;height:${ALTO}px;overflow:hidden;font-family:${CONFIG.fuenteTitulo};font-weight:800;font-synthesis:none}
-.fondo{position:absolute;inset:0;${fondoCSS};background-size:cover;background-position:center;filter:${filtroFondo || ''} saturate(${c.saturacion}) contrast(${c.contraste}) brightness(${c.brillo})}
+.fondo{position:absolute;inset:0;${fondoCSS};background-size:cover;background-position:center;transform-origin:${origen};${capas ? `transform:${capas.transform};` : ''}filter:${filtroFondo || ''} ${capas ? capas.trat.filtro : ''} saturate(${c.saturacion}) contrast(${c.contraste}) brightness(${c.brillo})}
 .grano{position:absolute;inset:0;background-image:url("data:image/svg+xml;utf8,${grano}");opacity:.16;mix-blend-mode:overlay}
 .vineta{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.6) 100%)}
 .z{position:absolute}
@@ -283,14 +392,19 @@ html,body{width:${ANCHO}px;height:${ALTO}px;overflow:hidden;background:#000}
 .badge{display:inline-block;background:${c.resalte};color:${textoSobre(c.resalte)};font-size:40px;letter-spacing:2px;padding:8px 26px;border:4px solid #fff;border-radius:8px;box-shadow:0 10px 22px rgba(0,0,0,.55);white-space:nowrap}
 .sub{color:#fff;font-size:44px;letter-spacing:3px;text-transform:uppercase;text-shadow:${contorno('#000', 3)},0 6px 14px rgba(0,0,0,.7);white-space:nowrap;overflow:hidden}
 ${css}
+${capas ? capas.cssExtra : ''}
 </style></head><body><div class="lienzo">
 <div class="fondo"></div>
+${capas ? capas.trat.html : ''}
 <div class="vineta"></div><div class="grano"></div>
+${capas ? capas.abajo.html : ''}
 ${html}
+${capas ? capas.arriba.html : ''}
 </div></body></html>`;
 }
 
 // Se ejecuta dentro del navegador: reduce la letra hasta que el texto quepa en su caja
+// ([data-fit]) y reparte el tamaño de cada línea en los textos apilados ([data-stack]).
 function ajustarTextos() {
     document.querySelectorAll('[data-fit]').forEach((h) => {
         const [max, min] = h.dataset.fit.split(',').map(Number);
@@ -306,6 +420,15 @@ function ajustarTextos() {
         if (h.dataset.v === 'centro') t.style.marginTop = (libre / 2) + 'px';
         if (h.dataset.v === 'abajo') t.style.marginTop = libre + 'px';
     });
+    document.querySelectorAll('[data-stack]').forEach((caja) => {
+        const W = caja.clientWidth, H = caja.clientHeight, MAX = Number(caja.dataset.stack) || 260, LH = 0.98;
+        const lineas = Array.from(caja.querySelectorAll('.lin'));
+        lineas.forEach((l) => { l.style.fontSize = '100px'; l.style.lineHeight = String(LH); });
+        let tam = lineas.map((l) => Math.min(MAX, 100 * W / Math.max(1, l.firstElementChild.getBoundingClientRect().width)));
+        const total = tam.reduce((a, t) => a + t * LH, 0);
+        if (total > H) tam = tam.map((t) => t * H / total);
+        lineas.forEach((l, i) => { l.style.fontSize = tam[i] + 'px'; });
+    });
 }
 
-module.exports = { ANCHO, ALTO, esc, numeroDeTexto, textoConResalte, PLANTILLAS, armarHTML, ajustarTextos, fondoComoDataURI };
+module.exports = { ANCHO, ALTO, esc, numeroDeTexto, textoConResalte, palabrasResalte, PLANTILLAS, armarHTML, ajustarTextos, fondoComoDataURI };

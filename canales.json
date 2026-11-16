@@ -7,6 +7,7 @@
       "maxPalabras": 4,
       "plantillas": [
         "sello",
+        "marco",
         "impacto_izq",
         "cinema",
         "dividida"
@@ -35,6 +36,7 @@
       "maxPalabras": 4,
       "plantillas": [
         "nivel",
+        "numero",
         "impacto_izq",
         "banda",
         "pregunta"
@@ -64,6 +66,9 @@
       "maxPalabras": 4,
       "plantillas": [
         "etereo",
+        "marco",
+        "circulo",
+        "cabecera",
         "pregunta",
         "cinema"
       ],
@@ -91,6 +96,7 @@
       "maxPalabras": 4,
       "plantillas": [
         "sello",
+        "apilado",
         "dividida",
         "pregunta",
         "impacto_izq",

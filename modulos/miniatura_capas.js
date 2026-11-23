@@ -34,8 +34,8 @@ const EFECTOS = {
 .titulo .t .hl{background:linear-gradient(180deg,${mezclar(c.resalte, '#ffffff', .6)} 0%,${c.resalte} 70%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}`;
     },
 
-    neon: (c) => `.titulo{color:#ffffff;text-shadow:0 0 4px #fff,0 0 14px ${c.resalte},0 0 32px ${c.resalte},0 0 68px ${rgba(c.resalte, .9)}}
-.titulo .hl{color:${mezclar(c.resalte, '#ffffff', .55)};text-shadow:0 0 6px #fff,0 0 20px ${c.resalte},0 0 44px ${c.resalte},0 0 90px ${c.resalte}}`,
+    neon: (c) => `.titulo{color:#ffffff;text-shadow:${contorno(c.trazo, 3)},0 0 12px ${c.resalte},0 0 28px ${c.resalte},0 0 56px ${rgba(c.resalte, .85)}}
+.titulo .hl{color:${mezclar(c.resalte, '#ffffff', .45)};text-shadow:${contorno(c.trazo, 3)},0 0 16px ${c.resalte},0 0 36px ${c.resalte},0 0 72px ${c.resalte}}`,
 
     doble: (c) => `.titulo{text-shadow:${contorno(c.trazo, 3)},9px 9px 0 ${c.resalte}}
 .titulo .hl{text-shadow:${contorno(c.trazo, 3)},9px 9px 0 ${c.color}}`
@@ -69,10 +69,14 @@ const TRATAMIENTOS = {
         ...capaTono('background:rgba(255,150,40,.3);mix-blend-mode:overlay')
     }),
 
-    bn_acento: (c) => ({
-        filtro: 'grayscale(.9) contrast(1.2)',
-        ...capaTono(`background:radial-gradient(circle at 72% 45%,${rgba(c.resalte, .85)} 0%,rgba(0,0,0,0) 58%);mix-blend-mode:color`)
-    }),
+    bn_acento: (c, _rng, foco) => {
+        const fx = foco ? `${Math.round((foco.x / 1280) * 100)}%` : '72%';
+        const fy = foco ? `${Math.round((foco.y / 720) * 100)}%` : '45%';
+        return {
+            filtro: 'grayscale(.9) contrast(1.2)',
+            ...capaTono(`background:radial-gradient(circle at ${fx} ${fy},${rgba(c.resalte, .85)} 0%,rgba(0,0,0,0) 58%);mix-blend-mode:color`)
+        };
+    },
 
     luz_lateral: () => ({
         filtro: '',
@@ -186,9 +190,9 @@ const ETIQUETAS = {
 // ---------------------------------------------------------------------
 // ENSAMBLE: junta todas las capas de un ADN para una plantilla
 // ---------------------------------------------------------------------
-function construirCapas(adn, c, plantilla) {
+function construirCapas(adn, c, plantilla, foco = null) {
     const rng = crearRng(adn.semilla || 1);
-    const trat = (TRATAMIENTOS[adn.tratamiento] || TRATAMIENTOS.natural)(c, rng);
+    const trat = (TRATAMIENTOS[adn.tratamiento] || TRATAMIENTOS.natural)(c, rng, foco);
     const abajo = { css: '', html: '' }, arriba = { css: '', html: '' };
     for (const nombre of adn.acentos || []) {
         const f = ACENTOS[nombre];

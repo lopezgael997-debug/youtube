@@ -1,7 +1,7 @@
 // =====================================================================
 // AGENTE MINIATURISTA
 // Por cada video crea varias miniaturas REALMENTE distintas:
-//   1) Claude propone un concepto por miniatura (gancho + escena con ángulos distintos)
+//   1) Claude propone un concepto por miniatura (gancho + etiqueta + escena con ángulos distintos)
 //   2) se pinta un fondo diferente para cada una (ComfyUI/Forge)
 //   3) se analiza la imagen (dónde está el sujeto, qué tono domina)
 //   4) miniatura_adn.js elige el diseño más distinto a lo que ya publicó ese canal
@@ -40,17 +40,19 @@ const ANGULOS = [
     'CONTRASTE: lo que todos creían frente a lo que realmente pasó'
 ];
 
-// Prompt del fondo: escena (en inglés) + encuadre + estilo del canal + espacio para el texto
-function promptDeFondo(escena, canal, i = 0) {
+// Prompt del fondo: escena (en inglés) + encuadre + estilo del canal + composición (lateral o centrada)
+function promptDeFondo(escena, canal, i = 0, centrado = false) {
     const limpia = String(escena).replace(/[()\[\]{}:]/g, ' ').replace(/\s+/g, ' ').trim();
     const estiloCanal = (canal.miniatura && canal.miniatura.fondoEstilo) || '';
-    return [`(${limpia}:1.25)`, ENCUADRES[i % ENCUADRES.length], estiloCanal,
-        'main subject on the right side of the frame, dark empty space on the left, strong focal point, highly detailed, sharp focus, no text']
+    const composicion = centrado
+        ? 'centered dramatic composition, balanced framing, focal point in the center, atmospheric depth, highly detailed, sharp focus, no text'
+        : 'main subject on the right side of the frame, dark empty space on the left, strong focal point, highly detailed, sharp focus, no text';
+    return [`(${limpia}:1.25)`, ENCUADRES[i % ENCUADRES.length], estiloCanal, composicion]
         .filter(Boolean).join(', ');
 }
 
 // ---------------------------------------------------------------------
-// CONCEPTOS: un gancho y una escena distintos por miniatura (con caché por video)
+// CONCEPTOS: un gancho, etiqueta y escena distintos por miniatura (con caché por video)
 // ---------------------------------------------------------------------
 async function conceptosDeMiniatura({ guion, canal, cantidad }) {
     const nicho = NICHOS[canal.nicho];
@@ -59,12 +61,12 @@ async function conceptosDeMiniatura({ guion, canal, cantidad }) {
     const narr = (guion.escenas || []).map(e => e.narracion);
     const extracto = [...narr.slice(0, 8), ...narr.slice(-3)].join(' ').slice(0, 2500);
     const angulos = Array.from({ length: cantidad }, (_, i) => `${i + 1}. ${ANGULOS[i % ANGULOS.length]}`).join('\n');
-    const archivo = path.join(DIR.guiones, `${guion.clave}_miniaturas${cantidad}_v2.json`);
+    const archivo = path.join(DIR.guiones, `${guion.clave}_miniaturas${cantidad}_v3.json`);
 
     const datos = await jsonConCache(
         archivo,
         async () => llamarClaude({
-            modelo: CFG.modeloEconomico, nicho, contexto: null, maxTokens: 1500, esfuerzo: CFG.efforts.plan,
+            modelo: CFG.modeloEconomico, nicho, contexto: null, maxTokens: 2200, esfuerzo: CFG.efforts.plan,
             instruccion: `Eres el director de miniaturas de YouTube del canal "${canal.nombre}".
 Video: "${guion.titulo_youtube}". Descripción: ${guion.descripcion || ''}
 Así empieza y termina la narración: ${extracto}
@@ -72,14 +74,15 @@ Así empieza y termina la narración: ${extracto}
 Crea EXACTAMENTE ${cantidad} conceptos de miniatura. Cada uno usa un ÁNGULO distinto, en este orden:
 ${angulos}
 
-Reglas:
-- "gancho": de 2 a ${maxPal} palabras en español, distinto al título y a los otros ganchos (que no compartan palabras clave). Debe prometer algo que el video SÍ cumple.
-- "sub": texto auxiliar de 1 a 3 palabras, o "" si no hace falta.
-- "escena": en INGLÉS, máximo 30 palabras. UNA escena con un sujeto principal en primer plano (una persona con expresión intensa o un objeto misterioso), acorde al tono del canal, sin violencia gráfica, sin texto y sin personas reales. Cada concepto debe tener un sujeto, un lugar y una emoción DIFERENTES a los de los demás.
+Reglas estrictas de precisión:
+- "gancho": de 2 a ${maxPal} palabras en español en MAYÚSCULAS. DEBE reflejar directamente el tema central del video ("${guion.titulo_youtube}") y entenderse por sí solo sin haber visto el video. PROHIBIDO usar detalles secundarios o anécdotas aisladas (como objetos o lugares sueltos) que confundan sobre de qué trata el video. No repitas palabras clave entre ganchos.
+- "etiqueta": de 2 a 3 palabras en MAYÚSCULAS que contextualicen el tema exacto de este video (ej. para prosperidad: "DECRETO DIARIO", "PODER VERBAL", "LEY MENTAL"; nunca temas ajenos al video).
+- "sub": texto auxiliar de 1 a 3 palabras que refuerce la promesa, o "" si no hace falta.
+- "escena": en INGLÉS, máximo 30 palabras. UNA escena visualmente poderosa con un sujeto principal claro, acorde al tema central del video y al tono del canal, sin violencia gráfica, sin texto y sin personas reales. Cada concepto debe cambiar de sujeto, encuadre y emoción.
 - Respeta las reglas del canal (nada de promesas de sanación ni de ganancias).
 
 Responde con este JSON:
-{ "conceptos": [ { "angulo": "curiosidad", "gancho": "DOS A CUATRO", "sub": "", "escena": "english thumbnail scene" } ] }`
+{ "conceptos": [ { "angulo": "curiosidad", "etiqueta": "PODER VERBAL", "gancho": "DOS A CUATRO", "sub": "", "escena": "english thumbnail scene" } ] }`
         }),
         (d) => {
             if (!Array.isArray(d.conceptos) || !d.conceptos.length) throw new Error('No hay conceptos de miniatura.');
@@ -91,7 +94,11 @@ Responde con este JSON:
         true
     );
     return datos.conceptos.slice(0, cantidad).map(c => ({
-        angulo: String(c.angulo || ''), gancho: c.gancho.trim(), sub: String(c.sub || '').trim(), escena: c.escena.trim()
+        angulo: String(c.angulo || ''),
+        etiqueta: String(c.etiqueta || '').trim(),
+        gancho: c.gancho.trim(),
+        sub: String(c.sub || '').trim(),
+        escena: c.escena.trim()
     }));
 }
 
@@ -132,13 +139,13 @@ function normalizarConceptos(o, cantidad) {
     if (Array.isArray(o.conceptos) && o.conceptos.length) {
         return Array.from({ length: cantidad }, (_, i) => o.conceptos[i % o.conceptos.length]);
     }
-    const unico = { gancho: String(o.gancho || '').trim(), escena: o.promptFondo, sub: o.sub };
+    const unico = { gancho: String(o.gancho || '').trim(), escena: o.promptFondo, sub: o.sub, etiqueta: '' };
     return Array.from({ length: cantidad }, () => unico);
 }
 
 /**
  * Genera varias miniaturas (cada una con su propio fondo y su propio diseño).
- *  - conceptos   [{ gancho, escena, sub }]  uno por miniatura (o  gancho + promptFondo para repetir el mismo)
+ *  - conceptos   [{ gancho, etiqueta, escena, sub }]  uno por miniatura
  *  - canal       objeto del canal (de canales.json)
  *  - fondo       (opcional) imagen propia: se usa en todas las variantes en vez de pintar
  *  - variantes, carpeta, nombreBase, sub, etiqueta, nivel, plantilla, browser
@@ -170,11 +177,11 @@ async function generarMiniaturas(o) {
             const gancho = String(concepto.gancho).trim();
             console.log(`[Miniaturista] ⏳ Variante ${i + 1} de ${cantidad}: "${gancho}"...`);
             try {
-                // Cada variante pide su propio fondo (ComfyUI usa una semilla aleatoria distinta)
                 let fondoImg = o.fondo || null;
                 if (!fondoImg && concepto.escena) {
                     const semillaImg = Math.floor(Math.random() * 4294967295);
-                    fondoImg = await pintarLibre(promptDeFondo(concepto.escena, canal, i), semillaImg, FORMATOS.horizontal);
+                    const esCentrado = canal.nicho === 'metafisica' ? i % 2 === 0 : i % 3 === 2;
+                    fondoImg = await pintarLibre(promptDeFondo(concepto.escena, canal, i, esCentrado), semillaImg, FORMATOS.horizontal);
                     fs.writeFileSync(path.join(carpeta, `${nombreBase}_fondo_${i + 1}.png`), fondoImg);
                 }
                 const analisis = fondoImg ? await analizarFondo(paginaAnalisis, fondoImg) : null;
@@ -183,11 +190,12 @@ async function generarMiniaturas(o) {
                     semilla: semilla + i * 7919, forzarPlantilla: o.plantilla && PLANTILLAS[o.plantilla] ? o.plantilla : undefined
                 });
                 const foco = analisis ? { x: (adn.voltear ? 1 - analisis.cx : analisis.cx) * ANCHO, y: analisis.cy * ALTO } : null;
+                const etiquetaFinal = o.etiqueta !== undefined ? o.etiqueta : (concepto.etiqueta || adn.etiqueta);
                 const d = {
                     t: textoConResalte(gancho, 1),
                     g: gancho,
                     sub: o.sub !== undefined ? o.sub : (concepto.sub || ''),
-                    etiqueta: o.etiqueta !== undefined ? o.etiqueta : adn.etiqueta,
+                    etiqueta: etiquetaFinal,
                     nivel: o.nivel ? Number(o.nivel) : null,
                     total: o.total ? Number(o.total) : 7,
                     c: adn.paleta,
@@ -203,7 +211,7 @@ async function generarMiniaturas(o) {
                 archivos.push(destino);
                 firmas.push(adn.firma);
                 etiquetasComparativa.push(`${nombre.replace(/\.jpg$/, '')} · ${adn.paleta.id} · ${adn.fuente} · ${adn.efecto}`);
-                detalles.push({ archivo: nombre, gancho, angulo: concepto.angulo || '', escena: concepto.escena || '', zona: analisis ? analisis.zona : null, voltear: adn.voltear, diversidad: adn.diversidad, ...adn.firma });
+                detalles.push({ archivo: nombre, gancho, etiqueta: etiquetaFinal, angulo: concepto.angulo || '', escena: concepto.escena || '', zona: analisis ? analisis.zona : null, voltear: adn.voltear, diversidad: adn.diversidad, ...adn.firma });
                 console.log(`[Miniaturista]    ✅ ${nombre} (${(bytes / 1024).toFixed(0)} KB) · ${adn.paleta.id} · ${adn.fuente} · ${adn.efecto} · ${adn.tratamiento}${adn.acentos.length ? ' · ' + adn.acentos.join('+') : ''}`);
             } catch (e) {
                 console.log(`[Miniaturista]    ⚠️ La variante ${i + 1} falló y se omite: ${e.message}`);
@@ -260,6 +268,7 @@ async function crearMiniaturasDeVideo({ guion, canal, carpeta, variantes }) {
     const base = {
         gancho: recortar(m.gancho || ganchoDeTitulo(guion.titulo_youtube)),
         escena: m.escena || (guion.escenas && guion.escenas[0] && guion.escenas[0].prompt_imagen) || 'a dramatic cinematic scene',
+        etiqueta: '',
         sub: ''
     };
 
